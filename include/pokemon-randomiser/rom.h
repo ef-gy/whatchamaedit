@@ -170,11 +170,15 @@ class bgry {
 
   const uint8_t byte(long start) const { return uint8_t(image.data()[start]); }
 
+  const uint16_t word_be(long start) const {
+    return uint16_t(byte(start) << 8 | byte(start + 1));
+  }
+
   const uint16_t word_le(long start) const {
     return uint16_t(byte(start + 1) << 8 | byte(start));
   }
 
-  const long address(uint8_t bank, uint16_t off) const {
+  static const long address(uint8_t bank, uint16_t off) {
     return bank * 0x4000 + off - (off >= 0x4000 ? 0x4000 : 0);
   }
 
@@ -392,6 +396,8 @@ class bgry {
 
  protected:
   bool loadOK;
+
+  static const long bankSize = 0x4000;
 };
 
 }  // namespace rom
