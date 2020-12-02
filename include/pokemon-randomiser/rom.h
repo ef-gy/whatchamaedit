@@ -175,7 +175,7 @@ class bgry {
   }
 
   const long address(uint8_t bank, uint16_t off) const {
-    return bank * 0x4000 + off - (off > 0x4000 ? 0x4000 : 0);
+    return bank * 0x4000 + off - (off >= 0x4000 ? 0x4000 : 0);
   }
 
   const long address(const std::pair<uint8_t, uint16_t> &hw) const {
