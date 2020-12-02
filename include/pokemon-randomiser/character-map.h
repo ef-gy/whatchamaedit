@@ -22,11 +22,11 @@ static std::map<uint8_t, std::string> english({
     // 0x01 - 0xa7: non-text data
 
     // 0xa9 - 0x5f: dialogue control codes
-    {0x49, "{dex+}"},
+    {0x49, "{page+}"},
     {0x4b, "{_cont}"},
     {0x4c, "{autocont}"},
     {0x4e, "{line+}"},
-    {0x4f, " "},  // literal space character
+    {0x4f, "{line++}"},  // move to bottom line
     {0x50, "{end}"},
     {0x51, "{para}"},
     {0x55, "{+cont}"},
@@ -36,7 +36,7 @@ static std::map<uint8_t, std::string> english({
 
     // variable control codes
     {0x52, "{player}"},
-    {0x53, "{rivak}"},
+    {0x53, "{rival}"},
     {0x59, "{target}"},
     {0x5a, "{user}"},
 
@@ -63,13 +63,13 @@ static std::map<uint8_t, std::string> english({
 
     {0x70, "‘"},
     {0x71, "’"},
-    {0x71, "“"},
-    {0x71, "”"},
-    {0x71, "・"},
-    {0x71, "⋯"},
-    {0x71, "ぁ"},
-    {0x71, "ぇ"},
-    {0x71, "ぉ"},
+    {0x72, "“"},
+    {0x73, "”"},
+    {0x74, "・"},
+    {0x75, "⋯"},
+    {0x76, "ぁ"},
+    {0x77, "ぇ"},
+    {0x78, "ぉ"},
     {0x7f, " "},
 
     // 0x80 - 0xbf: normal text characters
