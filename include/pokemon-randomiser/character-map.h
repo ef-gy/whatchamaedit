@@ -175,6 +175,21 @@ static std::map<uint8_t, std::string> english({
     {0xff, "9"},
 });
 
+static uint8_t toROMFormat(char c) {
+  // TODO: this function needs to be modified so that the reverse of this is
+  // always the same as the source text - or at the very least the shortest
+  // subset, if it starts with P. :)
+  for (const auto p : pokemon::text::bgry::english) {
+    if (p.second.size() > 0) {
+      if (c == p.second[0]) {
+        return p.first;
+      }
+    }
+  }
+
+  return 0x50;
+}
+
 }  // namespace bgry
 }  // namespace text
 }  // namespace pokemon

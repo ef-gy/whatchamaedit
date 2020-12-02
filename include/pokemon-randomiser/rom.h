@@ -9,21 +9,6 @@
 
 namespace pokemon {
 
-static uint8_t getRecodedText(char c) {
-  // TODO: this function needs to be modified so that the reverse of this is
-  // always the same as the source text - or at the very least the shortest
-  // subset, if it starts with P. :)
-  for (const auto p : pokemon::text::bgry::english) {
-    if (p.second.size() > 0) {
-      if (c == p.second[0]) {
-        return p.first;
-      }
-    }
-  }
-
-  return 0x50;
-}
-
 static const std::string listPokemon(
     const std::map<std::string, uint8_t> &ids) {
   std::ostringstream os;
@@ -193,6 +178,10 @@ class bgry {
     return bank * 0x4000 + off - (off > 0x4000 ? 0x4000 : 0);
   }
 
+  const long address(const std::pair<uint8_t, uint16_t> &hw) const {
+    return address(hw.first, hw.second);
+  }
+
   std::string getPokemonName(uint8_t id) const {
     static long nameBase = 0x1c228;
 
@@ -269,7 +258,7 @@ class bgry {
       if (spt.count(n) == 1) {
         for (auto p : spt[n]) {
           for (long pn = 0; pn <= 0x9; p++, pn++) {
-            uint16_t r = getRecodedText(st[pn]);
+            uint16_t r = text::bgry::toROMFormat(st[pn]);
             image[p] = r;
           }
         }
