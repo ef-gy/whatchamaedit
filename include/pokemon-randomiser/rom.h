@@ -29,7 +29,6 @@ static const std::string listPokemon(
   std::ostringstream os;
   os.clear();
 
-  os << ids.size() << "\n";
   for (const auto &pk : ids) {
     int16_t v = uint8_t(pk.first);
     os << "0x" << std::hex << std::setw(2) << std::setfill('0') << v << " ["
@@ -40,9 +39,32 @@ static const std::string listPokemon(
 }
 
 namespace rom {
+template <typename B = int8_t, typename W = int16_t, typename L = size_t>
+class pointer {
+ public:
+  pointer(B pBank, W pOffset) : bank(pBank), offset(pOffset) {}
+
+  B bank;
+  W offset;
+  L logical;
+
+ protected:
+};
+
+template <typename B = int8_t, typename W = int16_t, typename D = int32_t>
+class view {
+ public:
+  view(const std::vector<B> &pData, B pBank, W pOffset) : data(pData) {}
+
+ protected:
+  const std::vector<B> &data;
+};
+
 template <typename B = char>
 class bgry {
  public:
+  using view = rom::view<B>;
+
   bgry(std::string file) : loadOK(false) {
     if (!file.empty()) {
       load(file);
@@ -52,26 +74,29 @@ class bgry {
   bool load(std::string file) {
     loadOK = false;
 
-    std::ifstream rom(std::string(file), std::ios::binary | std::ios::ate);
+    std::basic_ifstream<B> rom(std::string(file),
+                               std::ios::binary | std::ios::ate);
     std::streamsize size = rom.tellg();
     rom.seekg(0, std::ios::beg);
 
-    image.resize(size);
+    data.resize(size);
 
-    if (rom.read(image.data(), size)) {
-      std::cerr << "read ROM, size=" << size << "\n";
+    if (size > 0) {
+      if (rom.read(data.data(), size)) {
+        std::cerr << "read ROM, size=" << size << "\n";
 
-      loadOK = true;
+        loadOK = true;
+      }
     }
 
     return loadOK;
   }
 
   bool save(std::string file) {
-    std::ofstream rom(file, std::ios::binary | std::ios::ate);
-    std::streamsize size = image.size();
+    std::basic_ofstream<B> rom(file, std::ios::binary | std::ios::ate);
+    std::streamsize size = data.size();
 
-    if (rom.write(image.data(), size)) {
+    if (rom.write(data.data(), size)) {
       std::cerr << "write ROM, size=" << size << "\n";
       return true;
     }
@@ -85,7 +110,7 @@ class bgry {
     std::string rv = "";
 
     for (long i = start; i <= end; i++) {
-      const int8_t b = int8_t(image[i]);
+      const int8_t b = byte(i);
       if (b == pokemon::text::bgry::end) {
         // 0x50 is the string terminator symbol (it's NOT 0x00).
         break;
@@ -112,8 +137,8 @@ class bgry {
     unsigned long start = 0;
     unsigned long normal = 0;
 
-    for (unsigned long i = 0; i <= image.size(); i++) {
-      uint8_t b = uint8_t(image[i]);
+    for (unsigned long i = 0; i <= size(); i++) {
+      uint8_t b = byte(i);
       const std::string v = pokemon::text::bgry::english[b];
 
       if (v.empty() || b == pokemon::text::bgry::end) {
@@ -147,7 +172,7 @@ class bgry {
     os.clear();
 
     for (long i = start; i <= end; i++) {
-      int16_t v = uint8_t(image[i]);
+      int16_t v = byte(i);
 
       if ((i - start) % alignment == 0) {
         os << "\n";
@@ -168,7 +193,7 @@ class bgry {
     return os.str();
   }
 
-  const uint8_t byte(long start) const { return uint8_t(image.data()[start]); }
+  const uint8_t byte(long start) const { return data[start]; }
 
   const uint16_t word_be(long start) const {
     return uint16_t(byte(start) << 8 | byte(start + 1));
@@ -256,14 +281,14 @@ class bgry {
     for (const auto st : starter) {
       if (sps.count(n) == 1) {
         for (const auto i : sps[n]) {
-          image[i] = ids[st];
+          data[i] = ids[st];
         }
       }
       if (spt.count(n) == 1) {
         for (auto p : spt[n]) {
           for (long pn = 0; pn <= 0x9; p++, pn++) {
             uint16_t r = text::bgry::toROMFormat(st[pn]);
-            image[p] = r;
+            data[p] = r;
           }
         }
       }
@@ -273,7 +298,7 @@ class bgry {
     long i = 0x4588;
     for (const auto &st : starter) {
       if (i <= 0x458a) {
-        image[i] = ids[st];
+        data[i] = ids[st];
         i += 1;
       }
     }
@@ -318,22 +343,22 @@ class bgry {
     for (long i = 0x4588; i <= 0x4597; i++) {
       switch (n) {
         case 0:
-          image[i] = 0xb1;
+          data[i] = 0xb1;
           break;
         case 1:
-          image[i] = 0x99;
+          data[i] = 0x99;
           break;
         case 2:
-          image[i] = 0xb0;
+          data[i] = 0xb0;
           break;
         default:
-          image[i] = 0x00;
+          data[i] = 0x00;
           break;
       }
       n++;
     }
 
-    image[0x4399] = 0xb1;
+    data[0x4399] = 0xb1;
   }
 
   std::string title(void) const {
@@ -343,8 +368,8 @@ class bgry {
     static const long end = 0x143;
 
     for (long i = start; i <= end; i++) {
-      if (image[i] != 0) {
-        t += image[i];
+      if (byte(i) != 0) {
+        t += byte(i);
       }
     }
 
@@ -357,9 +382,9 @@ class bgry {
     static const long high = 0x14e;
     static const long low = 0x14f;
 
-    for (long i = 0; i < image.size(); i++) {
+    for (long i = 0; i < size(); i++) {
       if (i != high && i != low) {
-        checksum += uint8_t(image.data()[i]);
+        checksum += byte(i);
       }
     }
 
@@ -372,8 +397,8 @@ class bgry {
     static const long high = 0x14e;
     static const long low = 0x14f;
 
-    checksum = uint8_t(image.data()[high]) << 8;
-    checksum |= uint8_t(image.data()[low]);
+    checksum = uint8_t(data[high]) << 8;
+    checksum |= uint8_t(data[low]);
 
     return checksum;
   }
@@ -386,13 +411,15 @@ class bgry {
     static const long high = 0x14e;
     static const long low = 0x14f;
 
-    image.data()[high] = uint8_t(checksum >> 8);
-    image.data()[low] = uint8_t(checksum & 0xff);
+    data[high] = checksum >> 8;
+    data[low] = checksum & 0xff;
 
     return this->checksum();
   }
 
-  std::vector<B> image;
+  std::vector<B> data;
+
+  const std::size_t size(void) const { return data.size(); }
 
  protected:
   bool loadOK;
