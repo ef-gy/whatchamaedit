@@ -2,9 +2,8 @@
 #define POKEMON_RANDOMISER_ROM_H
 
 #include <pokemon-randomiser/character-map.h>
+#include <pokemon-randomiser/header.h>
 
-#include <fstream>
-#include <iostream>
 #include <sstream>
 
 namespace pokemon {
@@ -39,72 +38,12 @@ static const std::string listPokemon(
 }
 
 namespace rom {
-template <typename B = int8_t, typename W = int16_t, typename L = size_t>
-class pointer {
- public:
-  pointer(B pBank, W pOffset) : bank(pBank), offset(pOffset) {}
-
-  B bank;
-  W offset;
-  L logical;
-
- protected:
-};
-
-template <typename B = int8_t, typename W = int16_t, typename D = int32_t>
-class view {
- public:
-  view(const std::vector<B> &pData, B pBank, W pOffset) : data(pData) {}
-
- protected:
-  const std::vector<B> &data;
-};
-
 template <typename B = char>
-class bgry {
+class bgry : public gameboy::rom::image<> {
  public:
-  using view = rom::view<B>;
+  using image = gameboy::rom::image<>;
 
-  bgry(std::string file) : loadOK(false) {
-    if (!file.empty()) {
-      load(file);
-    }
-  }
-
-  bool load(std::string file) {
-    loadOK = false;
-
-    std::basic_ifstream<B> rom(std::string(file),
-                               std::ios::binary | std::ios::ate);
-    std::streamsize size = rom.tellg();
-    rom.seekg(0, std::ios::beg);
-
-    data.resize(size);
-
-    if (size > 0) {
-      if (rom.read(data.data(), size)) {
-        std::cerr << "read ROM, size=" << size << "\n";
-
-        loadOK = true;
-      }
-    }
-
-    return loadOK;
-  }
-
-  bool save(std::string file) {
-    std::basic_ofstream<B> rom(file, std::ios::binary | std::ios::ate);
-    std::streamsize size = data.size();
-
-    if (rom.write(data.data(), size)) {
-      std::cerr << "write ROM, size=" << size << "\n";
-      return true;
-    }
-
-    return false;
-  }
-
-  operator bool(void) { return loadOK; }
+  bgry(const std::string &file) : image(file), header{*this} {}
 
   std::string getString(long start, long end) const {
     std::string rv = "";
@@ -361,20 +300,7 @@ class bgry {
     data[0x4399] = 0xb1;
   }
 
-  std::string title(void) const {
-    std::string t = "";
-
-    static const long start = 0x134;
-    static const long end = 0x143;
-
-    for (long i = start; i <= end; i++) {
-      if (byte(i) != 0) {
-        t += byte(i);
-      }
-    }
-
-    return t == "" ? "(NOT SET)" : t;
-  }
+  std::string title(void) const { return std::string(header.title); }
 
   long romChecksum(void) const {
     uint32_t checksum = 0;
@@ -417,14 +343,9 @@ class bgry {
     return this->checksum();
   }
 
-  std::vector<B> data;
+  gameboy::rom::header<> header;
 
-  const std::size_t size(void) const { return data.size(); }
-
- protected:
-  bool loadOK;
-
-  static const long bankSize = 0x4000;
+  operator bool(void) const { return loadOK && header; }
 };
 
 }  // namespace rom
