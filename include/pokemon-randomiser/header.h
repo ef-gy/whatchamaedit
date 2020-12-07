@@ -19,21 +19,55 @@ class header : view<B, W> {
  public:
   header(view v)
       : view{v},
-        entry{view::from(start).length(0x0004)},
-        logo{view::after(entry).to(0x0133)},
-        title{view::after(logo).to(0x0143)},
-        manufacturer{view::from(0x013f).to(0x0142)},
-        gbcolor{view::from(0x0143).length(0x0001)},
-        licensee{view::after(title).length(0x0002)},
-        supergb{view::after(licensee).length(0x0001)},
-        cartridge{view::after(supergb).length(0x0001)},
-        rom{view::after(cartridge).length(0x0001)},
-        ram{view::after(rom).length(0x0001)},
-        region{view::after(ram).length(0x0001)},
-        oldLicensee{view::after(region).length(0x0001)},
-        version{view::after(oldLicensee).length(0x0001)},
-        headerChecksum{view::after(version).length(0x0001)},
-        globalChecksum{view::after(headerChecksum).length(0x0002)} {}
+        entry{view::from(start).length(0x0004).expect(dt_code)},
+        logo{view::after(entry).to(0x0133).is(dt_bytes)},
+        title{view::after(logo).to(0x0143).is(dt_text)},
+        manufacturer{view::from(0x013f).to(0x0142).is(dt_text)},
+        gbcolor{view::from(0x0143).is(dt_byte)},
+        licensee{view::after(title).is(dt_text).length(0x0002)},
+        supergb{view::after(licensee).is(dt_byte)},
+        cartridge{view::after(supergb).is(dt_byte)},
+        rom{view::after(cartridge).is(dt_byte)},
+        ram{view::after(rom).is(dt_byte)},
+        region{view::after(ram).is(dt_byte)},
+        oldLicensee{view::after(region).is(dt_byte)},
+        version{view::after(oldLicensee).is(dt_byte)},
+        headerChecksum_{view::after(version).is(dt_byte)},
+        globalChecksum_{
+            view::after(headerChecksum_).is(dt_word).expect(e_big_endian)} {}
+
+  B checksumH(bool calculate) const {
+    if (calculate) {
+      W c = 0;
+
+      for (const auto b : view::after(logo).before(headerChecksum_)) {
+        c = c - b - 1;
+      }
+
+      return B(c);
+    }
+
+    return headerChecksum_.byte();
+  }
+
+  W checksumR(bool calculate) const {
+    if (calculate) {
+      W chk = globalChecksum_.word();
+      W c = 0;
+
+      // remove current checksum bytes before a full sum
+      c -= chk >> 8;
+      c -= chk & 0xff;
+
+      for (const auto b : view(*this)) {
+        c += b;
+      }
+
+      return c;
+    }
+
+    return globalChecksum_.word();
+  }
 
   view entry;
   view logo;
@@ -48,12 +82,17 @@ class header : view<B, W> {
   view region;
   view oldLicensee;
   view version;
-  view headerChecksum;
-  view globalChecksum;
 
   operator bool(void) const {
-    return view::from(start).to(end).isFullCover(entry, globalChecksum);
+    return view(*this) &&
+           view::from(start).to(end).isFullCover(entry, globalChecksum_) &&
+           checksumH(true) == checksumH(false) &&
+           checksumR(true) == checksumR(false);
   }
+
+ protected:
+  view headerChecksum_;
+  view globalChecksum_;
 };
 }  // namespace rom
 }  // namespace gameboy

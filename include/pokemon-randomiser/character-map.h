@@ -1,10 +1,14 @@
 #if !defined(POKEMON_RANDOMISER_CHARACTER_MAP_H)
 #define POKEMON_RANDOMISER_CHARACTER_MAP_H
 
+#include <algorithm>
 #include <map>
+#include <string>
 
 namespace pokemon {
 namespace text {
+using charmap = std::map<uint8_t, std::string>;
+
 namespace bgry {
 
 /* The BGRY section used Bulbapedia extensively for character translations.
@@ -15,7 +19,7 @@ namespace bgry {
 
 static const constexpr uint8_t end = 0x50;
 
-static std::map<uint8_t, std::string> english({
+static charmap english({
     // NULL
     {0x00, std::string()},
 
@@ -174,6 +178,30 @@ static std::map<uint8_t, std::string> english({
     {0xfe, "8"},
     {0xff, "9"},
 });
+
+static uint8_t toROMFormat(std::string &s) {
+  std::set<uint8_t> ids;
+  std::size_t longest = 1;
+
+  for (const auto p : pokemon::text::bgry::english) {
+    if (p.second.size() >= longest) {
+      if (s.rfind(p.second) == 0) {
+        if (p.second.size() > longest) {
+          ids.clear();
+          longest = p.second.size();
+        }
+        ids.insert(p.first);
+      }
+    }
+  }
+
+  if (ids.size() > 0) {
+    s.erase(0, longest);
+    return *std::max_element(ids.begin(), ids.end());
+  }
+
+  return 0;
+}
 
 static uint8_t toROMFormat(char c) {
   // TODO: this function needs to be modified so that the reverse of this is

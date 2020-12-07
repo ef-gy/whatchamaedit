@@ -39,24 +39,15 @@ class pointer {
 
   const B operator*(const std::vector<B> &data) const { return data[linear()]; }
 
-  pointer &operator++(void) {
+  pointer &operator++(void) { return *this += 1; }
+
+  pointer operator+(const ssize_t &d) const {
     if (linear_) {
-      linear_ = *linear_ + 1;
-    }
-    if (offset_) {
-      offset_ = *offset_ + 1;
-
-      if (*offset_ % bankSize_ == 0) {
-        offset_ = bankSize_;
-        bank_ = *bank_ + 1;
-      }
+      return pointer{*linear_ + d};
     }
 
-    return *this;
-  }
-
-  pointer operator+(const size_t &offset) const {
-    return pointer{linear() + offset};
+    const auto lin = pointer{linear() + d};
+    return pointer{lin.bank(), lin.offset()};
   }
 
   pointer operator++(int) {
@@ -65,6 +56,22 @@ class pointer {
     return r;
   }
 
+  pointer &operator+=(const ssize_t &d) {
+    if (linear_) {
+      linear_ = *linear_ + d;
+    }
+    if (offset_) {
+      const auto lin = pointer{linear() + d};
+
+      bank_ = lin.bank();
+      offset_ = lin.offset();
+    }
+
+    return *this;
+  }
+
+  ssize_t operator-(const pointer &p) const { return linear() - p.linear(); }
+
   const bool operator<(const pointer &b) const { return linear() < b.linear(); }
 
   const bool operator<=(const pointer &b) const {
@@ -72,7 +79,8 @@ class pointer {
   }
 
   const bool operator==(const pointer &b) const {
-    return linear() == b.linear();
+    return linear() == b.linear() && bank() == b.bank() &&
+           offset() == b.offset();
   }
 
  protected:

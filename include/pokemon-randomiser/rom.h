@@ -302,34 +302,13 @@ class bgry : public gameboy::rom::image<> {
 
   std::string title(void) const { return std::string(header.title); }
 
-  long romChecksum(void) const {
-    uint32_t checksum = 0;
+  long romChecksum(void) const { return header.checksumR(true); }
 
-    static const long high = 0x14e;
-    static const long low = 0x14f;
+  long headerChecksum(void) const { return header.checksumR(false); }
 
-    for (long i = 0; i < size(); i++) {
-      if (i != high && i != low) {
-        checksum += byte(i);
-      }
-    }
-
-    return uint16_t(checksum);
+  bool checksum(void) const {
+    return header.checksumR(true) == header.checksumR(false);
   }
-
-  long headerChecksum(void) const {
-    uint16_t checksum = 0;
-
-    static const long high = 0x14e;
-    static const long low = 0x14f;
-
-    checksum = uint8_t(data[high]) << 8;
-    checksum |= uint8_t(data[low]);
-
-    return checksum;
-  }
-
-  bool checksum(void) const { return romChecksum() == headerChecksum(); }
 
   bool fixChecksum(void) {
     uint16_t checksum = romChecksum();
