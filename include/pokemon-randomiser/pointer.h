@@ -36,6 +36,7 @@ class pointer {
   }
 
   static constexpr const W bankSize(void) { return bankSize_; }
+  static constexpr const B banks(std::size_t s) { return s / bankSize_; }
 
   const B operator*(const std::vector<B> &data) const { return data[linear()]; }
 
@@ -82,6 +83,22 @@ class pointer {
     return linear() == b.linear() && bank() == b.bank() &&
            offset() == b.offset();
   }
+
+  template <typename V>
+  class lazy {
+   public:
+    lazy(const V &bank, const V &offset) : bank_{bank}, offset_{offset} {}
+
+    operator bool(void) const { return bool(bank_) && bool(offset_); }
+
+    operator pointer(void) const {
+      return pointer{bank_.byte(), offset_.word()};
+    }
+
+   protected:
+    const V &bank_;
+    const V &offset_;
+  };
 
  protected:
   std::optional<B> bank_;

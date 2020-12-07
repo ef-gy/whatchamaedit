@@ -12,6 +12,8 @@
 namespace gameboy {
 namespace rom {
 enum type {
+  dt_rom_bank,
+  dt_rom_offset,
   dt_code,
   dt_byte,
   dt_bytes,
@@ -61,7 +63,11 @@ class view {
  public:
   using annotations = annotations<B, W>;
   using pointer = gameboy::rom::pointer<B, W>;
+  using lazy = typename pointer::template lazy<view>;
   using bytes = std::vector<B>;
+
+  using subviews = std::set<view *>;
+  using lazies = std::set<lazy *>;
 
   view(const bytes &data)
       : data_{data},
@@ -119,8 +125,10 @@ class view {
 
     if (a.type) {
       switch (*a.type) {
+        case dt_rom_bank:
         case dt_byte:
           return view{this, start_, start_, b};
+        case dt_rom_offset:
         case dt_word:
           return view{this, start_, start_ + 1, b};
         default:
@@ -156,9 +164,6 @@ class view {
     const view &view_;
     pointer position_;
   };
-
-  // subviews
-  using subviews = std::set<view *>;
 
   // read bytes
   const B byte(void) { return cur_++ * data_; }
@@ -219,10 +224,6 @@ class view {
 
   ssize_t size(void) const { return end_ - start_ + 1; }
 
-  const bool isFullCover(const view &start, const view &end) const {
-    return start.start_ == start_ && end.end_ == end_;
-  }
-
   operator const std::string(void) const {
     std::string r;
 
@@ -247,7 +248,11 @@ class view {
   iterator begin(void) const { return iterator{*this, start_}; };
   iterator end(void) const { return iterator{*this, end_ + 1}; };
 
-  operator bool(void) const { return checkLength() && checkEndianness(); }
+  operator bool(void) const {
+    return checkRange() && checkLength() && checkEndianness() && checkValue();
+  }
+
+  B banks(void) const { return pointer::banks(data_.size()); }
 
  protected:
   const bytes &data_;
@@ -264,6 +269,7 @@ class view {
       switch (*annotations_.type) {
         case dt_code:
           break;
+        case dt_rom_bank:
         case dt_byte:
           minLength = 1;
           maxLength = 1;
@@ -271,6 +277,7 @@ class view {
         case dt_bytes:
           minLength = 0;
           break;
+        case dt_rom_offset:
         case dt_word:
           minLength = 2;
           maxLength = 2;
@@ -290,11 +297,45 @@ class view {
   bool checkEndianness(void) const {
     if (annotations_.type) {
       switch (*annotations_.type) {
+        case dt_rom_offset:
         case dt_word:
         case dt_words:
           if (!annotations_.endianness) {
             return false;
           }
+        default:
+          break;
+      }
+    }
+
+    return true;
+  }
+
+  bool check(const pointer &p) const {
+    const pointer start{0};
+    const pointer end{data_.size()};
+
+    return start <= p && p <= end;
+  }
+
+  bool checkRange(void) const {
+    return start_ <= cur_ && cur_ <= end_ && check(start_) && check(cur_) &&
+           check(end_);
+  }
+
+  bool checkValue(void) const {
+    if (annotations_.type) {
+      switch (*annotations_.type) {
+        case dt_rom_bank:
+          if (byte() >= banks()) {
+            return false;
+          }
+          break;
+        case dt_rom_offset:
+          if (word() >= pointer::bankSize() * 2) {
+            return false;
+          }
+          break;
         default:
           break;
       }
@@ -313,47 +354,19 @@ class view {
     return r;
   }
 
+  bool check(const lazies &lazs) const {
+    bool r = true;
+
+    for (const auto &v : lazs) {
+      r = r && bool(*v) && check(pointer(*v));
+    }
+
+    return r;
+  }
+
   bool checkWithin(const view &b) const {
     return start_ <= b.start_ && b.end_ <= end_;
   }
-};
-
-template <typename B = uint8_t, typename W = uint16_t>
-class image {
- public:
-  using pointer = gameboy::rom::pointer<B, W>;
-  using view = gameboy::rom::view<B, W>;
-
-  image(const std::string &file) : loadOK(load(file)) {}
-
-  bool load(const std::string &file) {
-    bool ok = false;
-
-    std::ifstream rom(std::string(file), std::ios::in | std::ios::binary);
-
-    data = std::vector<B>((std::istreambuf_iterator<char>(rom)),
-                          std::istreambuf_iterator<char>());
-
-    return (ok = data.size() > 0);
-  }
-
-  bool save(const std::string &file) const {
-    std::ofstream rom(file, std::ios::binary | std::ios::ate);
-    std::streamsize size = data.size();
-
-    return bool(rom.write((char *)data.data(), size));
-  }
-
-  operator bool(void) { return loadOK; }
-
-  std::vector<B> data;
-
-  const std::size_t size(void) const { return data.size(); }
-
-  operator view(void) const { return view{data}; }
-
- protected:
-  bool loadOK;
 };
 }  // namespace rom
 }  // namespace gameboy

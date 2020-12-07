@@ -100,9 +100,8 @@ class header : view<B, W> {
   view version;
 
   operator bool(void) const {
-    return view(*this) &&
-           view::from(start).to(end).isFullCover(entry, globalChecksum_) &&
-           view::check(subviews_) && checksumH(true) == checksumH(false) &&
+    return view(*this) && view::check(subviews_) &&
+           checksumH(true) == checksumH(false) &&
            checksumR(true) == checksumR(false);
   }
 

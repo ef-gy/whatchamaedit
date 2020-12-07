@@ -3,6 +3,7 @@
 
 #include <pokemon-randomiser/character-map.h>
 #include <pokemon-randomiser/header.h>
+#include <pokemon-randomiser/image.h>
 
 #include <sstream>
 
