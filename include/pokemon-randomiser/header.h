@@ -11,10 +11,11 @@ class header : view<B, W> {
  public:
   using view = view<B, W>;
   using pointer = typename view::pointer;
+  using subviews = typename view::subviews;
 
  protected:
-  const pointer start{0x0100};
-  const pointer end{0x014f};
+  static constexpr pointer start{0x0100};
+  static constexpr pointer end{0x014f};
 
  public:
   header(view v)
@@ -34,7 +35,22 @@ class header : view<B, W> {
         version{view::after(oldLicensee).is(dt_byte)},
         headerChecksum_{view::after(version).is(dt_byte)},
         globalChecksum_{
-            view::after(headerChecksum_).is(dt_word).expect(e_big_endian)} {}
+            view::after(headerChecksum_).is(dt_word).expect(e_big_endian)},
+        subviews_{&entry,
+                  &logo,
+                  &title,
+                  &manufacturer,
+                  &gbcolor,
+                  &licensee,
+                  &supergb,
+                  &cartridge,
+                  &rom,
+                  &ram,
+                  &region,
+                  &oldLicensee,
+                  &version,
+                  &headerChecksum_,
+                  &globalChecksum_} {}
 
   B checksumH(bool calculate) const {
     if (calculate) {
@@ -86,13 +102,15 @@ class header : view<B, W> {
   operator bool(void) const {
     return view(*this) &&
            view::from(start).to(end).isFullCover(entry, globalChecksum_) &&
-           checksumH(true) == checksumH(false) &&
+           view::check(subviews_) && checksumH(true) == checksumH(false) &&
            checksumR(true) == checksumR(false);
   }
 
  protected:
   view headerChecksum_;
   view globalChecksum_;
+
+  const subviews subviews_;
 };
 }  // namespace rom
 }  // namespace gameboy

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <set>
 
 namespace gameboy {
 namespace rom {
@@ -27,6 +28,8 @@ enum endianness {
 template <typename B = int8_t, typename W = int16_t>
 class annotations {
  public:
+  using pointer = gameboy::rom::pointer<B, W>;
+
   annotations(void) {}
   annotations(const type &a) : type{a} {}
   annotations(const endianness &a) : endianness{a} {}
@@ -60,25 +63,25 @@ class view {
   using pointer = gameboy::rom::pointer<B, W>;
   using bytes = std::vector<B>;
 
-  view(const std::vector<B> &data)
+  view(const bytes &data)
       : data_{data},
         start_{0},
         end_{data.size() - 1},
         cur_{0},
         annotations_{} {}
-  view(const std::vector<B> &data, const pointer &start)
+  view(const bytes &data, const pointer &start)
       : data_{data},
         start_{start},
         end_{start.bank(), W(start.bankSize() - 1)},
         cur_{start},
         annotations_{} {}
-  view(const std::vector<B> &data, const pointer &start, const pointer &end)
+  view(const bytes &data, const pointer &start, const pointer &end)
       : data_{data}, start_{start}, end_{end}, cur_{start}, annotations_{} {}
 
   // this is the full constructor used by the verbose constructors
-  view(const bytes &data, const pointer &start, const pointer &end,
+  view(const view *parent, const pointer &start, const pointer &end,
        const annotations &annotations)
-      : data_{data},
+      : data_{parent->data_},
         start_{start},
         end_{end},
         cur_{start},
@@ -86,29 +89,29 @@ class view {
 
   // chainable, verbose constructors
   view from(const pointer &p) const {
-    return view{data_, p, end_, annotations_};
+    return view{this, p, end_, annotations_};
   }
 
   view to(const pointer &p) const {
-    return view{data_, start_, p, annotations_};
+    return view{this, start_, p, annotations_};
   }
 
   view length(const W &l) const {
-    return view{data_, start_, start_ + (l - 1), annotations_};
+    return view{this, start_, start_ + (l - 1), annotations_};
   }
 
-  view start(void) const { return view{data_, start_, end_, annotations_}; }
+  view start(void) const { return view{this, start_, end_, annotations_}; }
 
   view after(const view &v) const {
-    return view{data_, v.end_ + 1, end_, annotations_};
+    return view{this, v.end_ + 1, end_, annotations_};
   }
 
   view before(const view &v) const {
-    return view{data_, start_, v.start_ + -1, annotations_};
+    return view{this, start_, v.start_ + -1, annotations_};
   }
 
   view expect(const annotations &a) const {
-    return view{data_, start_, end_, annotations_ | a};
+    return view{this, start_, end_, annotations_ | a};
   }
 
   view is(const annotations &a) const {
@@ -117,15 +120,15 @@ class view {
     if (a.type) {
       switch (*a.type) {
         case dt_byte:
-          return view{data_, start_, start_, b};
+          return view{this, start_, start_, b};
         case dt_word:
-          return view{data_, start_, start_ + 1, b};
+          return view{this, start_, start_ + 1, b};
         default:
           break;
       }
     }
 
-    return view{data_, start_, end_, b};
+    return view{this, start_, end_, b};
   }
 
   // iterator
@@ -154,12 +157,17 @@ class view {
     pointer position_;
   };
 
+  // subviews
+  using subviews = std::set<view *>;
+
+  // read bytes
   const B byte(void) { return cur_++ * data_; }
   const B byte(void) const { return cur_ * data_; }
 
   const B byte(const pointer &p) { return (cur_ = p) * data_; }
   const B byte(const pointer &p) const { return p * data_; }
 
+  // read words
   const W word_be(const pointer &p) const {
     const B b[2]{byte(p), byte(p + 1)};
 
@@ -229,7 +237,7 @@ class view {
     return r;
   }
 
-  operator std::vector<B>(void) const { return std::vector<B>{begin(), end()}; }
+  operator bytes(void) const { return bytes{begin(), end()}; }
 
   bool operator==(const view &b) const {
     return &data_ == &b.data_ && start_ == b.start_ && end_ == b.end_ &&
@@ -242,7 +250,7 @@ class view {
   operator bool(void) const { return checkLength() && checkEndianness(); }
 
  protected:
-  const std::vector<B> &data_;
+  const bytes &data_;
   const pointer start_;
   const pointer end_;
   pointer cur_;
@@ -250,7 +258,7 @@ class view {
 
   bool checkLength(void) const {
     size_t minLength = 0;
-    size_t maxLength = data_.size();
+    size_t maxLength = size();
 
     if (annotations_.type) {
       switch (*annotations_.type) {
@@ -262,9 +270,10 @@ class view {
           break;
         case dt_bytes:
           minLength = 0;
+          break;
         case dt_word:
-          minLength = 1;
-          maxLength = 1;
+          minLength = 2;
+          maxLength = 2;
           break;
         case dt_words:
           minLength = 0;
@@ -292,6 +301,20 @@ class view {
     }
 
     return true;
+  }
+
+  bool check(const subviews &subs) const {
+    bool r = true;
+
+    for (const auto &v : subs) {
+      r = r && bool(*v) && checkWithin(*v);
+    }
+
+    return r;
+  }
+
+  bool checkWithin(const view &b) const {
+    return start_ <= b.start_ && b.end_ <= end_;
   }
 };
 

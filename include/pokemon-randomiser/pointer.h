@@ -8,8 +8,8 @@ namespace rom {
 template <typename B = int8_t, typename W = int16_t, W bankSize_ = 0x4000>
 class pointer {
  public:
-  pointer(B bank, W offset) : bank_(bank), offset_(offset) {}
-  pointer(size_t linear) : linear_(linear) {}
+  constexpr pointer(B bank, W offset) : bank_(bank), offset_(offset) {}
+  constexpr pointer(size_t linear) : linear_(linear) {}
 
   const B bank(void) const {
     if (bank_) {
