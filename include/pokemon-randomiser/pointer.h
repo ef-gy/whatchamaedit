@@ -95,6 +95,10 @@ class pointer {
       return pointer{bank_.byte(), offset_.word()};
     }
 
+    pointer resolve(void) const {
+      return pointer{bank_.byte(), offset_.word()};
+    }
+
    protected:
     const V &bank_;
     const V &offset_;

@@ -1,9 +1,9 @@
 #if !defined(POKEMON_RANDOMISER_ROM_H)
 #define POKEMON_RANDOMISER_ROM_H
 
-#include <pokemon-randomiser/character-map.h>
 #include <pokemon-randomiser/header.h>
 #include <pokemon-randomiser/image.h>
+#include <pokemon-randomiser/string.h>
 
 #include <sstream>
 
@@ -43,65 +43,21 @@ template <typename B = char>
 class bgry : public gameboy::rom::image<> {
  public:
   using image = gameboy::rom::image<>;
+  using pointer = typename image::pointer;
+  using view = typename image::view;
+  using string = gameboy::rom::string<>;
 
   bgry(const std::string &file) : image(file), header{*this} {}
 
   std::string getString(long start, long end) const {
-    std::string rv = "";
-
-    for (long i = start; i <= end; i++) {
-      const int8_t b = byte(i);
-      if (b == pokemon::text::bgry::end) {
-        // 0x50 is the string terminator symbol (it's NOT 0x00).
-        break;
-
-        // TODO: potentially verify invariants of text strings, such as that all
-        // characters after 0x50 ought to be blanks in a fixed-width string.
-      }
-
-      const std::string v = pokemon::text::bgry::english[b];
-
-      if (v.empty()) {
-        break;
-      }
-
-      rv += v;
-    }
-
-    return rv;
+    return string{view{*this}.from(start).to(end)}.translated();
   }
 
-  std::map<long, std::string> getStrings(void) const {
-    std::map<long, std::string> rv;
-    std::string line = "";
-    unsigned long start = 0;
-    unsigned long normal = 0;
+  std::map<pointer, std::string> getStrings(void) const {
+    std::map<pointer, std::string> rv;
 
-    for (unsigned long i = 0; i <= size(); i++) {
-      uint8_t b = byte(i);
-      const std::string v = pokemon::text::bgry::english[b];
-
-      if (v.empty() || b == pokemon::text::bgry::end) {
-        if (normal > 3) {
-          static const double normalRatio = 0.8;
-
-          if (double(normal) / double(line.size()) >= normalRatio) {
-            rv[start] = line;
-          }
-        }
-        line.clear();
-        normal = 0;
-        start = 0;
-      } else {
-        if (line.empty()) {
-          start = i;
-        }
-        line += v;
-
-        if (0x80 <= b && b <= 0xbf) {
-          normal++;
-        }
-      }
+    for (const auto &p : string{view{*this}}.scan()) {
+      rv[p] = string{view{*this}.from(p)}.translated();
     }
 
     return rv;
@@ -141,14 +97,6 @@ class bgry : public gameboy::rom::image<> {
 
   const uint16_t word_le(long start) const {
     return uint16_t(byte(start + 1) << 8 | byte(start));
-  }
-
-  static const long address(uint8_t bank, uint16_t off) {
-    return bank * 0x4000 + off - (off >= 0x4000 ? 0x4000 : 0);
-  }
-
-  const long address(const std::pair<uint8_t, uint16_t> &hw) const {
-    return address(hw.first, hw.second);
   }
 
   std::string getPokemonName(uint8_t id) const {

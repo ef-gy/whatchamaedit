@@ -179,6 +179,10 @@ static charmap english({
     {0xff, "9"},
 });
 
+static constexpr bool isText(uint8_t b) {
+  return (0x80 <= b && b <= 0xbf) || (0xf6 <= b && b <= 0xff);
+};
+
 static uint8_t toROMFormat(std::string &s) {
   std::set<uint8_t> ids;
   std::size_t longest = 1;
