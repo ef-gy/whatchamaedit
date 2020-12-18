@@ -119,7 +119,7 @@ class bgry : public gameboy::rom::image<> {
   const std::set<uint8_t> getStarterPokemon(void) const {
     std::set<uint8_t> rv{};
 
-    for (const auto p : getStarterPointers()) {
+    for (const auto &p : getStarterPointers()) {
       for (const auto pn : p.second) {
         rv.insert(byte(pn));
       }
@@ -166,7 +166,7 @@ class bgry : public gameboy::rom::image<> {
     auto sps = getStarterPointers();
     auto spt = getStarterTextPointers();
 
-    for (const auto st : starter) {
+    for (const auto &st : starter) {
       if (sps.count(n) == 1) {
         for (const auto i : sps[n]) {
           data[i] = ids[st];
@@ -275,7 +275,6 @@ class bgry : public gameboy::rom::image<> {
 
   operator bool(void) const { return loadOK && header; }
 };
-
 }  // namespace rom
 }  // namespace pokemon
 

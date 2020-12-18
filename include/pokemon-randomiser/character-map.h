@@ -187,7 +187,7 @@ static uint8_t toROMFormat(std::string &s) {
   std::set<uint8_t> ids;
   std::size_t longest = 1;
 
-  for (const auto p : pokemon::text::bgry::english) {
+  for (const auto &p : pokemon::text::bgry::english) {
     if (p.second.size() >= longest) {
       if (s.rfind(p.second) == 0) {
         if (p.second.size() > longest) {
@@ -211,7 +211,7 @@ static uint8_t toROMFormat(char c) {
   // TODO: this function needs to be modified so that the reverse of this is
   // always the same as the source text - or at the very least the shortest
   // subset, if it starts with P. :)
-  for (const auto p : pokemon::text::bgry::english) {
+  for (const auto &p : pokemon::text::bgry::english) {
     if (p.second.size() > 0) {
       if (c == p.second[0]) {
         return p.first;

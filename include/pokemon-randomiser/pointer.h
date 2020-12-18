@@ -1,6 +1,8 @@
 #if !defined(POKEMON_RANDOMISER_POINTER_H)
 #define POKEMON_RANDOMISER_POINTER_H
 
+#include <iomanip>
+#include <sstream>
 #include <vector>
 
 namespace gameboy {
@@ -108,6 +110,31 @@ class pointer {
   std::optional<B> bank_;
   std::optional<W> offset_;
   std::optional<size_t> linear_;
+
+ public:
+  const std::string debug(void) const {
+    std::ostringstream os{};
+
+    os << "*{";
+    if (linear_) {
+      os << "[0x" << std::hex << std::setw(6) << std::setfill('0') << *linear_
+         << "]";
+    } else {
+      os << " 0x" << std::hex << std::setw(6) << std::setfill('0') << linear()
+         << " ";
+    }
+    os << " = ";
+    if (bank_ && offset_) {
+      os << "[0x" << std::hex << std::setw(2) << std::setfill('0') << W(*bank_)
+         << ":" << std::setw(4) << *offset_ << "]";
+    } else {
+      os << " 0x" << std::hex << std::setw(2) << std::setfill('0') << W(bank())
+         << ":" << std::setw(4) << offset() << " ";
+    }
+    os << "}";
+
+    return os.str();
+  }
 };
 }  // namespace rom
 }  // namespace gameboy

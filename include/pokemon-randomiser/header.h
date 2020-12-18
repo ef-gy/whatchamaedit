@@ -19,38 +19,22 @@ class header : view<B, W> {
 
  public:
   header(view v)
-      : view{v},
+      : view{v.asLittleEndian()},
         entry{view::from(start).length(0x0004).expect(dt_code)},
         logo{view::after(entry).to(0x0133).is(dt_bytes)},
         title{view::after(logo).to(0x0143).is(dt_text)},
         manufacturer{view::from(0x013f).to(0x0142).is(dt_text)},
-        gbcolor{view::from(0x0143).is(dt_byte)},
+        gbcolor{view::from(0x0143).asByte()},
         licensee{view::after(title).is(dt_text).length(0x0002)},
-        supergb{view::after(licensee).is(dt_byte)},
-        cartridge{view::after(supergb).is(dt_byte)},
-        rom{view::after(cartridge).is(dt_byte)},
-        ram{view::after(rom).is(dt_byte)},
-        region{view::after(ram).is(dt_byte)},
-        oldLicensee{view::after(region).is(dt_byte)},
-        version{view::after(oldLicensee).is(dt_byte)},
-        headerChecksum_{view::after(version).is(dt_byte)},
-        globalChecksum_{
-            view::after(headerChecksum_).is(dt_word).expect(e_big_endian)},
-        subviews_{&entry,
-                  &logo,
-                  &title,
-                  &manufacturer,
-                  &gbcolor,
-                  &licensee,
-                  &supergb,
-                  &cartridge,
-                  &rom,
-                  &ram,
-                  &region,
-                  &oldLicensee,
-                  &version,
-                  &headerChecksum_,
-                  &globalChecksum_} {}
+        supergb{view::after(licensee).asByte()},
+        cartridge{view::after(supergb).asByte()},
+        rom{view::after(cartridge).asByte()},
+        ram{view::after(rom).asByte()},
+        region{view::after(ram).asByte()},
+        oldLicensee{view::after(region).asByte()},
+        version{view::after(oldLicensee).asByte()},
+        headerChecksum_{view::after(version).asByte()},
+        globalChecksum_{view::after(headerChecksum_).asWord().asBigEndian()} {}
 
   B checksumH(bool calculate) const {
     if (calculate) {
@@ -100,7 +84,7 @@ class header : view<B, W> {
   view version;
 
   operator bool(void) const {
-    return view(*this) && view::check(subviews_) &&
+    return view(*this) && view::check(subviews_()) &&
            checksumH(true) == checksumH(false) &&
            checksumR(true) == checksumR(false);
   }
@@ -109,7 +93,24 @@ class header : view<B, W> {
   view headerChecksum_;
   view globalChecksum_;
 
-  const subviews subviews_;
+  subviews subviews_(void) const {
+    auto s = const_cast<header*>(this);
+    return subviews{&s->entry,
+                    &s->logo,
+                    &s->title,
+                    &s->manufacturer,
+                    &s->gbcolor,
+                    &s->licensee,
+                    &s->supergb,
+                    &s->cartridge,
+                    &s->rom,
+                    &s->ram,
+                    &s->region,
+                    &s->oldLicensee,
+                    &s->version,
+                    &s->headerChecksum_,
+                    &s->globalChecksum_};
+  }
 };
 }  // namespace rom
 }  // namespace gameboy

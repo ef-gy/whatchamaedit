@@ -8,9 +8,9 @@
 #include <iterator>
 #include <optional>
 #include <set>
+#include <sstream>
 
 namespace gameboy {
-namespace rom {
 enum type {
   dt_rom_bank,
   dt_rom_offset,
@@ -26,6 +26,8 @@ enum endianness {
   e_little_endian,
   e_big_endian,
 };
+
+namespace rom {
 
 template <typename B = int8_t, typename W = int16_t>
 class annotations {
@@ -116,6 +118,8 @@ class view {
     return view{this, start_, v.start_ + -1, annotations_};
   }
 
+  // data type annotations
+
   view expect(const annotations &a) const {
     return view{this, start_, end_, annotations_ | a};
   }
@@ -138,6 +142,19 @@ class view {
 
     return view{this, start_, end_, b};
   }
+
+  // shortcuts
+  view asLittleEndian(void) const { return expect({e_little_endian}); }
+
+  view asBigEndian(void) const { return expect({e_big_endian}); }
+
+  view asByte(void) const { return is({dt_byte}); }
+
+  view asWord(void) const { return is({dt_word}); }
+
+  view asROMBank(void) const { return is({dt_rom_bank}); }
+
+  view asROMOffset(void) const { return is({dt_rom_offset}); }
 
   // iterator
   class iterator : public std::iterator<std::input_iterator_tag, B> {
@@ -166,7 +183,6 @@ class view {
   };
 
   // read bytes
-  const B byte(void) { return cur_++ * data_; }
   const B byte(void) const { return cur_ * data_; }
 
   const B byte(const pointer &p) { return (cur_ = p) * data_; }
@@ -186,40 +202,26 @@ class view {
   }
 
   const W word(const pointer &p) const {
-    W r;
-
     if (annotations_.endianness) {
       switch (*annotations_.endianness) {
         case e_big_endian:
-          r = word_be(p);
-          break;
+          return word_be(p);
         case e_little_endian:
-          r = word_le(p);
-          break;
+          return word_le(p);
         default:
           break;
       }
     }
 
-    return r;
+    std::cerr << "WARNING: endianness not declared for word read\n";
+    return word_le(p);
   }
 
   const W word(void) const { return word(cur_); }
 
-  const W word(pointer &p) {
-    const auto t = *this;
-
-    W r = t.word(p);
-    cur_ += 2;
-    return r;
-  }
-
-  const W word(void) {
-    const auto t = *this;
-
-    W r = t.word();
-    cur_ += 2;
-    return r;
+  const W word(const pointer &p) {
+    cur_ = p;
+    return word();
   }
 
   ssize_t size(void) const { return end_ - start_ + 1; }
@@ -248,11 +250,54 @@ class view {
   iterator begin(void) const { return iterator{*this, start_}; };
   iterator end(void) const { return iterator{*this, end_ + 1}; };
 
+  pointer last(void) const { return end_; }
+
   operator bool(void) const {
     return checkRange() && checkLength() && checkEndianness() && checkValue();
   }
 
   B banks(void) const { return pointer::banks(data_.size()); }
+
+  bool within(const pointer &s, const pointer &e) const {
+    return start_ <= s && e <= end_;
+  }
+
+  bool within(const view &b) const { return within(b.start_, b.end_); }
+
+  template <typename V>
+  std::vector<V> repeated(const view &cnt) const {
+    std::vector<V> r{};
+    pointer st = start_;
+
+    if (cnt) {
+      auto c = cnt.byte();
+
+      while (c-- > 0) {
+        V item{from(st)};
+        auto size = item.size();
+        if (item) {
+          r.push_back(item);
+        }
+        if (size <= 0) {
+          break;
+        }
+        st = st + size;
+      }
+    }
+
+    return r;
+  }
+
+  template <typename V>
+  pointer last(const std::vector<V> &r) {
+    pointer l = start_;
+    for (const auto &v : r) {
+      if (l < v.last()) {
+        l = v.last();
+      }
+    }
+    return l;
+  }
 
  protected:
   const bytes &data_;
@@ -348,7 +393,19 @@ class view {
     bool r = true;
 
     for (const auto &v : subs) {
-      r = r && bool(*v) && checkWithin(*v);
+      r = r && bool(*v) && within(*v);
+      if (!r) {
+        std::cerr << "CHECK FAILED: subview test:\n"
+                  << " * par " << this->debug() << "\n"
+                  << " * sub " << v->debug() << "\n";
+        if (!bool(*v)) {
+          std::cerr << " ! ERR sub view is not valid\n";
+        }
+        if (!within(*v)) {
+          std::cerr << " ! ERR sub view is not contained within parent\n";
+        }
+        break;
+      }
     }
 
     return r;
@@ -364,8 +421,18 @@ class view {
     return r;
   }
 
-  bool checkWithin(const view &b) const {
-    return start_ <= b.start_ && b.end_ <= end_;
+ public:
+  std::string debug(void) const {
+    std::ostringstream os{};
+
+    os << "[view:"
+       << " window=[" << start_.debug() << " - " << end_.debug() << "]"
+       << " length=[0x" << std::hex << std::setw(4) << std::setfill('0')
+       << size() << "]"
+       << " cursor=[" << cur_.debug() << "]"
+       << "]";
+
+    return os.str();
   }
 };
 }  // namespace rom
