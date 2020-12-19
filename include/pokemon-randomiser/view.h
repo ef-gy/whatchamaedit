@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <set>
 
@@ -93,6 +94,23 @@ class view {
         end_{end},
         cur_{start},
         annotations_{annotations} {}
+
+  /* "dummy" constructor, for doing things like automatically determining the
+   * size of a detailed object description.
+   *
+   * Changing values in these views is not advised, but you're already getting a
+   * const reference, so you knew that... :)
+   */
+  static view blank(size_t count = pointer::bankSize()) {
+    static std::map<size_t, bytes> blocks{};
+
+    bytes &b = blocks[count];
+    if (b.size() != count) {
+      b.resize(count);
+    }
+
+    return view{b};
+  }
 
   // chainable, verbose constructors
   view from(const pointer &p) const {
