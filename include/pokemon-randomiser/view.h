@@ -8,7 +8,6 @@
 #include <iterator>
 #include <optional>
 #include <set>
-#include <sstream>
 
 namespace gameboy {
 enum type {
@@ -115,7 +114,12 @@ class view {
   }
 
   view before(const view &v) const {
-    return view{this, start_, v.start_ + -1, annotations_};
+    return view{this, start_, v.start_ - 1, annotations_};
+  }
+
+  view toBankEnd(void) const {
+    return view{this, start_, pointer{start_.bank(), pointer::bankSize() - 1},
+                annotations_};
   }
 
   // data type annotations
@@ -183,10 +187,40 @@ class view {
   };
 
   // read bytes
-  const B byte(void) const { return cur_ * data_; }
+  const B byte(void) const {
+    if (!checkUnitReadable()) {
+      /* explicitly check that the current block of data is readable before
+       * trying to read anyting - this includes things such as the cursor being
+       * in range of data_. It's enough to check this with byte() reads, because
+       * higher level constructs all use byte() reads.
+       *
+       * We check this here, because this test should easily be inlined and
+       * memoized by any compiler (it's just a few less-than-or-equals) and
+       * unbounded access will actually cause memory access faults in this
+       * program, which isn't great with input data like Pokemon where the game
+       * is known to crash in hilarious ways.
+       *
+       * This approach allows relatively safe data type scanning through the
+       * whole ROM using a simple linear search, since individual data type
+       * constructors will simply accept a view and normally are thoroughly
+       * testing the validity of the data block they would read at this pointer.
+       */
+      return 0;
+    }
 
-  const B byte(const pointer &p) { return (cur_ = p) * data_; }
-  const B byte(const pointer &p) const { return p * data_; }
+    return cur_ * data_;
+  }
+
+  const B byte(const pointer &p) { return (cur_ = p), byte(); }
+
+  const B byte(const pointer &p) const {
+    /* note: this access function is not as tightly protected as the non-const
+     * and the cursor variant - it's expected that accessors of this function
+     * will have run a proper check themselves or their accessors would,
+     * otherwise the access safety doesn't work and you'll likely have a bad
+     * day. */
+    return p * data_;
+  }
 
   // read words
   const W word_be(const pointer &p) const {
@@ -213,7 +247,6 @@ class view {
       }
     }
 
-    std::cerr << "WARNING: endianness not declared for word read\n";
     return word_le(p);
   }
 
@@ -253,7 +286,8 @@ class view {
   pointer last(void) const { return end_; }
 
   operator bool(void) const {
-    return checkRange() && checkLength() && checkEndianness() && checkValue();
+    return checkRange() && checkUnitReadable() && checkLength() &&
+           checkEndianness() && checkValue();
   }
 
   B banks(void) const { return pointer::banks(data_.size()); }
@@ -299,12 +333,46 @@ class view {
     return l;
   }
 
+  W unit(void) const {
+    if (annotations_.type) {
+      switch (*annotations_.type) {
+        case dt_code:
+        case dt_rom_bank:
+        case dt_byte:
+        case dt_bytes:
+        case dt_text:
+          return 1;
+        case dt_rom_offset:
+        case dt_word:
+        case dt_words:
+          return 2;
+      }
+    }
+
+    return 1;
+  }
+
+  const pointer startPtr(void) const { return start_; }
+  const pointer endPtr(void) const { return end_; }
+  const pointer curPtr(void) const { return cur_; }
+
  protected:
   const bytes &data_;
   const pointer start_;
   const pointer end_;
   pointer cur_;
   annotations annotations_;
+
+  bool checkUnitReadable(void) const {
+    /* check that a full unit of data is currently readable - this requires as
+     * many bytes as unit() indicates on top of the cursor, -1 because the end
+     * is defined via the high byte of the compound (e.g. base + 1 for a word,
+     * instead of one after). */
+    const pointer high = cur_ + unit() - 1;
+
+    return check(start_) && check(cur_) && check(high) && check(end_) &&
+           start_ <= cur_ && cur_ <= high && high <= end_;
+  }
 
   bool checkLength(void) const {
     size_t minLength = 0;
@@ -340,16 +408,21 @@ class view {
   }
 
   bool checkEndianness(void) const {
-    if (annotations_.type) {
-      switch (*annotations_.type) {
-        case dt_rom_offset:
-        case dt_word:
-        case dt_words:
-          if (!annotations_.endianness) {
-            return false;
-          }
-        default:
-          break;
+    if (unit() > 1) {
+      /* for any data type with a unit size larger than a byte, e.g. a word or a
+       * quad, insist on having the endianness set explicitly.
+       *
+       * Since this is GameBoy, we could reasonably default to little endian,
+       * which is the default for the architecture, but seeing as how even the
+       * cartridge header itself has an example fo a big endian 16 bit checksum,
+       * let's just not and always be explicit. The endianness is inherited just
+       * like any other annotation, so it's easy to set at the top level view of
+       * a data structure if all the values in the same share that attribute.
+       */
+      if (!annotations_.type || !annotations_.endianness) {
+        /* only check for the case that's explicitly disallowed, and allow
+         * everything else. */
+        return false;
       }
     }
 
@@ -357,13 +430,19 @@ class view {
   }
 
   bool check(const pointer &p) const {
+    /* check a pointer for being valid in this view, that is, the pointer is in
+     * the range possible for the size of data_. */
     const pointer start{0};
     const pointer end{data_.size()};
 
+    /* note that the start and end are both inclusive, thus the
+     * less-than-or-equal on both sides of the equation. */
     return start <= p && p <= end;
   }
 
   bool checkRange(void) const {
+    /* check that the cursor in this view is valid and in range between the
+     * start and end of the window that was set. */
     return start_ <= cur_ && cur_ <= end_ && check(start_) && check(cur_) &&
            check(end_);
   }
@@ -394,16 +473,8 @@ class view {
 
     for (const auto &v : subs) {
       r = r && bool(*v) && within(*v);
+
       if (!r) {
-        std::cerr << "CHECK FAILED: subview test:\n"
-                  << " * par " << this->debug() << "\n"
-                  << " * sub " << v->debug() << "\n";
-        if (!bool(*v)) {
-          std::cerr << " ! ERR sub view is not valid\n";
-        }
-        if (!within(*v)) {
-          std::cerr << " ! ERR sub view is not contained within parent\n";
-        }
         break;
       }
     }
@@ -416,23 +487,13 @@ class view {
 
     for (const auto &v : lazs) {
       r = r && bool(*v) && check(pointer(*v));
+
+      if (!r) {
+        break;
+      }
     }
 
     return r;
-  }
-
- public:
-  std::string debug(void) const {
-    std::ostringstream os{};
-
-    os << "[view:"
-       << " window=[" << start_.debug() << " - " << end_.debug() << "]"
-       << " length=[0x" << std::hex << std::setw(4) << std::setfill('0')
-       << size() << "]"
-       << " cursor=[" << cur_.debug() << "]"
-       << "]";
-
-    return os.str();
   }
 };
 }  // namespace rom
