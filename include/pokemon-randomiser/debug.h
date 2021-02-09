@@ -1,6 +1,7 @@
 #if !defined(POKEMON_RANDOMISER_DEBUG_H)
 #define POKEMON_RANDOMISER_DEBUG_H
 
+#include <ef.gy/range.h>
 #include <pokemon-randomiser/map.h>
 #include <pokemon-randomiser/pointer.h>
 #include <pokemon-randomiser/sprite.h>
@@ -170,11 +171,35 @@ static std::string dump(const pokemon::map::bgry<B, W> &map) {
       os << " ! ERR invalid tile set\n";
     }
   } else {
+    os << " * CUR " << dump(map.start) << "\n";
+
     os << " - dim {W,H}@T: {" << W(map.width()) << "," << W(map.height())
        << "}@" << map.size() << "\n";
 
+    os << " - cnc" << (map.haveNorth() ? " [NORTH]" : " [-----]")
+       << (map.haveSouth() ? " [SOUTH]" : " [-----]")
+       << (map.haveWest() ? " [WEST.]" : " [-----]")
+       << (map.haveEast() ? " [EAST.]" : " [-----]") << "\n";
+
+    for (const auto l : efgy::range<B>(0, map.height(), false)) {
+      os << (l == 0 ? " > BLK" : "   xxx");
+
+      for (const auto c : efgy::range<B>(0, map.width(), false)) {
+        const auto block = map.block(l, c);
+
+        if (block) {
+          os << " " << std::hex << std::setw(2) << std::setfill('0')
+             << W(*block);
+        } else {
+          os << " ??";
+        }
+      }
+
+      os << "\n";
+    }
+
     if (map.text) {
-      os << " - txt scripts at: " << debug::dump(map.text) << "\n";
+      os << " - txt " << debug::dump(map.text) << "\n";
     }
 
     auto obj = map.objects();
