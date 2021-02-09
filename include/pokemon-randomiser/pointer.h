@@ -41,11 +41,7 @@ class pointer {
    * presented as initially, for style reasons.
    */
   constexpr pointer asMatched(const pointer &ptr) const {
-    if (isLinear()) {
-      return asLinear(ptr);
-    }
-
-    return asBanked(ptr);
+    return isLinear() ? asLinear(ptr) : asBanked(ptr);
   }
 
   constexpr bool isLinear(void) const { return bool(linear_); }
@@ -53,26 +49,14 @@ class pointer {
   constexpr bool isBanked(void) const { return bool(bank_) && bool(offset_); }
 
   constexpr const B bank(void) const {
-    if (bank_) {
-      return *bank_;
-    }
-
-    return banks(*linear_);
+    return bank_ ? *bank_ : banks(*linear_);
   }
 
   constexpr const W offset(void) const {
-    if (offset_) {
-      return *offset_;
-    }
-
-    return normaliseOffset(bank(), *linear_);
+    return offset_ ? *offset_ : normaliseOffset(bank(), *linear_);
   }
 
   constexpr const size_t linear(void) const {
-    if (linear_) {
-      return *linear_;
-    }
-
     /* we reuse the normaliseOffset() function and pretend this is for bank 0,
      * so that we get a 0x0000-based offset, which we can simply add to the
      * multiple of the bank size and have everything magically check out.
@@ -81,7 +65,8 @@ class pointer {
      * exists for GameBoys. And, like, why would anyone create a memory map with
      * non-constant bank sizes?
      */
-    return *bank_ * bankSize_ + normaliseOffset(0, *offset_);
+    return linear_ ? *linear_
+                   : *bank_ * bankSize_ + normaliseOffset(0, *offset_);
   }
 
   /* Bank size asserted by this pointer.
@@ -115,8 +100,6 @@ class pointer {
   constexpr pointer operator-(const ssize_t &d) const {
     return asMatched(pointer{linear() - d});
   }
-
-  const B operator*(const std::vector<B> &data) const { return data[linear()]; }
 
   pointer &operator++(void) { return *this += 1; }
 
@@ -163,26 +146,6 @@ class pointer {
            offset() == b.offset();
   }
 
-  template <typename V>
-  class lazy {
-   public:
-    lazy(const V &bank, const V &offset) : bank_{bank}, offset_{offset} {}
-
-    operator bool(void) const { return bool(bank_) && bool(offset_); }
-
-    operator pointer(void) const {
-      return pointer{bank_.byte(), offset_.word()};
-    }
-
-    pointer resolve(void) const {
-      return pointer{bank_.byte(), offset_.word()};
-    }
-
-   protected:
-    const V &bank_;
-    const V &offset_;
-  };
-
  protected:
   std::optional<B> bank_;
   std::optional<W> offset_;
@@ -209,38 +172,78 @@ class pointer {
      * provably correctly identifying a single, specific memory location. //
      * TODO: prove this transform is non-destructive and non-aliasing.
      */
-    if (bank == 0) {
-      /* for bank 0, simply calculate the remainder of the offset to the bank
-       * size.
-       *
-       * We discard any overflow in the normalisation, because we assumet the
-       * bank size is correct and authoritative, i.e. if we were to have an
-       * offset of {1 bank, 2k bytes}, and we are called with bank=0, then we
-       * take the bank=0 as truth and simply discard the 1 bank offset. This is
-       * because theoretically, it's up to the MBC chip to map banks to wherever
-       * it pleases, but the complexity of any map that isn't trivially a
-       * multiple of the bank size as the start of a bank's address space is
-       * simply not worth the extra cycles spent on every memory access, and it
-       * is thinkable someone would have an MBC that has, say, the normal
-       * cartridge RAM area actually shadowing ROM banks.
-       *
-       * Since this is confusing and we normally actually really want to use
-       * linear addresses for manipulating the ROM in a non-GameBoy runtime
-       * environment, it's better to simply assert the most likely map and cut
-       * out any confusion by finding a single preferred notation and running
-       * with it. */
-      return offset % bankSize_;
-    }
+    return bank == 0
+               ?
+               /* for bank 0, simply calculate the remainder of the offset to
+                * the bank size.
+                *
+                * We discard any overflow in the normalisation, because we
+                * assumet the bank size is correct and authoritative, i.e. if we
+                * were to have an offset of {1 bank, 2k bytes}, and we are
+                * called with bank=0, then we take the bank=0 as truth and
+                * simply discard the 1 bank offset. This is because
+                * theoretically, it's up to the MBC chip to map banks to
+                * wherever it pleases, but the complexity of any map that isn't
+                * trivially a multiple of the bank size as the start of a bank's
+                * address space is simply not worth the extra cycles spent on
+                * every memory access, and it is thinkable someone would have an
+                * MBC that has, say, the normal cartridge RAM area actually
+                * shadowing ROM banks.
+                *
+                * Since this is confusing and we normally actually really want
+                * to use linear addresses for manipulating the ROM in a
+                * non-GameBoy runtime environment, it's better to simply assert
+                * the most likely map and cut out any confusion by finding a
+                * single preferred notation and running with it. */
+               offset % bankSize_
 
-    /* if we reach here, then the bank wasn't 0, so we use the algorithm for
-     * bank=0 (i.e.: "clip to remainder against bank size") and simply add one
-     * bank size.
-     *
-     * This is simple and straightforward and produces stable results.
-     */
-    return normaliseOffset(0, offset) + bankSize_;
+               /* if we reach here, then the bank wasn't 0, so we use the
+                * algorithm for bank=0 (i.e.: "clip to remainder against bank
+                * size") and simply add one bank size.
+                *
+                * This is simple and straightforward and produces stable
+                * results.
+                */
+               : normaliseOffset(0, offset) + bankSize_;
   }
 };
+
+/* lazily-referencing pointer type.
+ *
+ * This pointer "constructor" is "lazy" in that this wrapper is constructed with
+ * an indirect reference, i.e. a pointer to a pointer. Additionally, the
+ * pointer's value is only retrieved when the pointer itself is constructed.
+ *
+ * Most pointer dereferencing should probably happen through this class. As an
+ * added bonus, this can be constructed in a "dangling" way, without the thing
+ * being pointed to actually existing just yet - as long as it does when the
+ * pointer is being dereferenced.
+ *
+ * @view a type behaving like a gameboy::rom::view.
+ */
+template <typename view, typename B = int8_t, typename W = int16_t,
+          W bankSize_ = 0x4000>
+class lazy {
+ public:
+  using pointer = rom::pointer<B, W, bankSize_>;
+
+  constexpr lazy(const view bank, const view offset)
+      : bank_{bank}, offset_{offset} {}
+
+  constexpr operator bool(void) const { return bool(bank_) && bool(offset_); }
+
+  constexpr const pointer bank() const { return bank_.curPtr(); }
+  constexpr const pointer offset() const { return offset_.curPtr(); }
+
+  constexpr operator pointer(void) const {
+    return pointer{bank_.byte(), offset_.word()};
+  }
+
+ protected:
+  const view bank_;
+  const view offset_;
+};
+
 }  // namespace rom
 }  // namespace gameboy
 

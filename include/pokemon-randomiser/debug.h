@@ -47,6 +47,24 @@ static std::string dump(const gameboy::rom::view<B, W> &view) {
   return os.str();
 }
 
+template <typename view, typename B, typename W, W bankSize_>
+static std::string dump(const gameboy::rom::lazy<view, B, W, bankSize_> &lazy) {
+  using pointer = gameboy::rom::pointer<B, W, bankSize_>;
+
+  std::ostringstream os{};
+
+  os << "?{bank@ " << dump(lazy.bank()) << " offset@ " << dump(lazy.offset())
+     << "]";
+  if (lazy) {
+    os << " =OK=> " << dump(pointer(lazy));
+  } else {
+    os << " =NOK_";
+  }
+  os << "}";
+
+  return os.str();
+}
+
 template <typename B, typename W>
 static std::string dump(const gameboy::rom::view<B, W> &view,
                         const std::set<gameboy::rom::view<B, W> *> &subviews) {
@@ -106,23 +124,6 @@ static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
 }
 
 template <typename B, typename W>
-static std::string dump(const pokemon::map::bgry<B, W> &map) {
-  std::ostringstream os{};
-
-  os << "MAP\n"
-     << " * idn " << std::dec << W(map.id) << "\n"
-     << " * vwp " << dump(gameboy::rom::view<B, W>(map)) << "\n";
-  if (!gameboy::rom::view<B, W>(map)) {
-    os << " ! ERR invalid view\n";
-  }
-  if (!pokemon::tileset::bgry<B, W>(map)) {
-    os << " ! ERR invalid tile set\n";
-  }
-
-  return os.str();
-}
-
-template <typename B, typename W>
 static std::string dump(const pokemon::object::bgry<B, W> &object) {
   std::ostringstream os{};
 
@@ -133,6 +134,53 @@ static std::string dump(const pokemon::object::bgry<B, W> &object) {
       os << " ! ERR invalid view\n";
     } else {
       os << " ! ERR invalid sub view for object map\n";
+    }
+  } else {
+    os << " - wrp#" << std::dec << object.warpc() << "\n";
+    os << " - sgn#" << std::dec << object.signc() << "\n";
+    os << " - spr#" << std::dec << object.spritec() << "/"
+       << object.sprites.size() << "\n";
+    for (const auto &s : object.sprites) {
+      if (s) {
+        os << debug::dump(s);
+      }
+    }
+  }
+
+  return os.str();
+}
+
+template <typename B, typename W>
+static std::string dump(const pokemon::map::bgry<B, W> &map) {
+  using view = gameboy::rom::view<B, W>;
+  using tileset = pokemon::tileset::bgry<B, W>;
+
+  std::ostringstream os{};
+
+  os << "MAP\n"
+     << " * idn " << std::dec << W(map.id) << "\n"
+     << " * vwp " << dump(view(map)) << "\n";
+
+  if (!map) {
+    os << " ! ERR invalid map data\n";
+    if (!view(map)) {
+      os << " ! ERR invalid view\n";
+    }
+    if (!tileset(map)) {
+      os << " ! ERR invalid tile set\n";
+    }
+  } else {
+    os << " - dim {W,H}@T: {" << W(map.width()) << "," << W(map.height())
+       << "}@" << map.size() << "\n";
+
+    if (map.text) {
+      os << " - txt scripts at: " << debug::dump(map.text) << "\n";
+    }
+
+    auto obj = map.objects();
+
+    if (obj) {
+      os << dump(obj);
     }
   }
 

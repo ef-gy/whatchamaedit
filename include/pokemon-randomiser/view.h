@@ -60,13 +60,18 @@ class annotations {
   }
 };
 
-template <typename B = int8_t, typename W = int16_t>
+namespace generic {
+
+/* TODO: replace the bytes with a std::string_view, because it shouldn't be
+ * mutated, ever, and it'd be cool to be able to constexpr this. Especially the
+ * static calculations for the buffer size. */
+template <typename B = int8_t, typename W = int16_t,
+          typename bytes = typename std::vector<B>>
 class view {
  public:
   using annotations = annotations<B, W>;
   using pointer = gameboy::rom::pointer<B, W>;
-  using lazy = typename pointer::template lazy<view>;
-  using bytes = std::vector<B>;
+  using lazy = gameboy::rom::lazy<view, B, W>;
 
   using subviews = std::set<view *>;
   using lazies = std::set<lazy *>;
@@ -101,15 +106,11 @@ class view {
    * Changing values in these views is not advised, but you're already getting a
    * const reference, so you knew that... :)
    */
-  static view blank(size_t count = pointer::bankSize()) {
-    static std::map<size_t, bytes> blocks{};
+  template <W count = pointer::bankSize()>
+  static view blank(void) {
+    static const bytes block(count, 0);
 
-    bytes &b = blocks[count];
-    if (b.size() != count) {
-      b.resize(count);
-    }
-
-    return view{b};
+    return view{block};
   }
 
   // chainable, verbose constructors
@@ -141,11 +142,17 @@ class view {
   }
 
   // data type annotations
-
   view expect(const annotations &a) const {
     return view{this, start_, end_, annotations_ | a};
   }
 
+  /* set expected data type.
+   *
+   * This tells the view what kind of data you're expecting at the current
+   * position. In addition to merging in the new annotation data, it will also
+   * automatically set the resulting view's new length upon return for specific
+   * data types.
+   */
   view is(const annotations &a) const {
     annotations b = annotations_ | a;
 
@@ -204,6 +211,8 @@ class view {
     pointer position_;
   };
 
+  const B operator[](const pointer &ptr) const { return data_[ptr.linear()]; }
+
   // read bytes
   const B byte(void) const {
     if (!checkUnitReadable()) {
@@ -226,7 +235,7 @@ class view {
       return 0;
     }
 
-    return cur_ * data_;
+    return (*this)[cur_];
   }
 
   const B byte(const pointer &p) { return (cur_ = p), byte(); }
@@ -237,7 +246,7 @@ class view {
      * will have run a proper check themselves or their accessors would,
      * otherwise the access safety doesn't work and you'll likely have a bad
      * day. */
-    return p * data_;
+    return (*this)[p];
   }
 
   // read words
@@ -514,6 +523,18 @@ class view {
     return r;
   }
 };
+}  // namespace generic
+
+template <typename B = int8_t, typename W = int16_t>
+using view = generic::view<B, W, std::vector<B>>;
+
+namespace container {
+template <typename view, typename thing>
+class array : view {
+ public:
+  array(view v) : view(v) {}
+};
+}  // namespace container
 }  // namespace rom
 }  // namespace gameboy
 
