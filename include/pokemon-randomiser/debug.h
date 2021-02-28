@@ -53,6 +53,10 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
       prefix = "; ";
     }
 
+    if (*a.label == "__scope") {
+      prefix = "; ";
+    }
+
     os << prefix << *a.label;
 
     if (!((*a.label).rfind("__", 0) == 0)) {
@@ -178,8 +182,8 @@ static std::string dump(const std::array<gameboy::rom::view<B, W>, count> views,
 
   auto hull{gameboy::rom::view<B, W>::hull(views)};
 
-  os << "SECTION \"" << section << " 0x" << std::hex << hull.startPtr().linear()
-     << "\", ";
+  os << "\nSECTION \"" << section << " 0x" << std::hex
+     << hull.startPtr().linear() << "\", ";
   if (hull.startPtr().bank() == 0) {
     os << "ROM0[$" << std::hex << hull.startPtr().offset() << "]";
   } else {
@@ -201,6 +205,8 @@ static std::string dump(const std::array<gameboy::rom::view<B, W>, count> views,
       }
     }
   }
+
+  os << "; ===== END SECTION: " << section << " ======\n\n\n";
 
   return os.str();
 }
@@ -261,39 +267,29 @@ template <typename B, typename W>
 static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
   std::ostringstream os{};
 
-  os << "SPRITE\n"
-     << " * VMP\n"
-     << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
+  os << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
 
   if (!bool(sprite)) {
     os << " ! ERR sprite is not valid\n";
   } else {
     os << std::hex << std::setw(2) << std::setfill('0');
 
-    os << " - spr 0x" << W(sprite.sprite_.byte()) << "\n"
-       << " - pos 0x{" << W(sprite.positionX_.byte()) << ","
-       << W(sprite.positionY_.byte()) << "}\n"
-       << " - mob 0x" << W(sprite.mobility_.byte()) << "}\n"
-       << " - mov 0x" << W(sprite.movement_.byte()) << "}\n";
+    std::string_view section = "SPRITE";
 
     if (sprite.isNPC()) {
-      os << " > NPC []\n";
+      section = "NPC SPRITE";
     }
     if (sprite.isItem()) {
-      os << " > ITM [0x" << W(sprite.item_.byte()) << "]\n";
+      section = "ITEM SPRITE";
     }
     if (sprite.isTrainer()) {
-      os << " > TRN [opponent: 0x" << W(sprite.opponent_.byte())
-         << ", team: " << W(sprite.team_.byte()) << "]\n";
+      section = "TRAINER SPRITE";
     }
     if (sprite.isPokemon()) {
-      os << " > PKM [opponent: 0x" << W(sprite.opponent_.byte())
-         << ", level: " << W(sprite.level_.byte()) << "]\n";
+      section = "POKEMON SPRITE";
     }
 
-    os << dump(sprite.fields());
-    os << dump(gameboy::rom::view<B, W>::hull(sprite.fields())
-                   .label("sprite_transitive_hull"));
+    os << dump(sprite.fields(), section);
   }
 
   return os.str();
@@ -303,8 +299,7 @@ template <typename B, typename W>
 static std::string dump(const pokemon::object::bgry<B, W> &object) {
   std::ostringstream os{};
 
-  os << "OBJECT MAP\n"
-     << " * VMP " << dump(gameboy::rom::view<B, W>(object)) << "\n";
+  os << "OBJECT MAP\n" << dump(gameboy::rom::view<B, W>(object)) << "\n";
   if (!object) {
     if (!gameboy::rom::view<B, W>(object)) {
       os << " ! ERR invalid view\n";
@@ -317,9 +312,7 @@ static std::string dump(const pokemon::object::bgry<B, W> &object) {
     os << " - spr#" << std::dec << object.spritec() << "/"
        << object.sprites.size() << "\n";
 
-    os << dump(object.fields());
-    os << dump(gameboy::rom::view<B, W>::hull(object.fields())
-                   .label("object_transitive_hull"));
+    os << dump(object.fields(), "OBJECT MAP");
 
     for (const auto &s : object.sprites) {
       if (s) {

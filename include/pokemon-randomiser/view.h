@@ -120,7 +120,7 @@ class view {
 
   // this is the full constructor used by the verbose constructors
   constexpr view(const view parent, const pointer start, const pointer end,
-                 const annotations &annotations)
+                 const annotations annotations)
       : data_{parent.data_},
         start_{start},
         end_{end},

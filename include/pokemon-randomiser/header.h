@@ -87,7 +87,6 @@ class header : public view<B, W> {
 
     // read current ROM checksum from header
     return globalChecksum_.word();
-    ;
   }
 
   view entry;
