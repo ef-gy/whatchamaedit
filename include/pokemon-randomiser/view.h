@@ -127,7 +127,7 @@ class view {
         cur_{start},
         annotations_{annotations} {}
 
-  /* "dummy" constructor, for doing things like automatically determining the
+  /** "dummy" constructor, for doing things like automatically determining the
    * size of a detailed object description.
    *
    * Changing values in these views is not advised, but you knew that.
@@ -135,6 +135,45 @@ class view {
   template <W count = pointer::bankSize()>
   constexpr static view blank(void) {
     return view{generic::blank<count, B, W>{}};
+  }
+
+  /** create a view as the hull of the listed views.
+   *
+   * @constructor
+   *
+   * The created view will be wide enough to encompass all the listed @views.
+   * This is useful to trim down a structure's overarching view after
+   * initialising the fields.
+   */
+  template <std::size_t N>
+  static constexpr view hull(const std::array<view, N> views) {
+    view fr = views.front();
+
+    pointer start = fr.start_;
+    pointer end = fr.end_;
+
+    for (const auto v : views) {
+      if (v.start_ < start) {
+        start = v.start_;
+      }
+      if (end < v.end_) {
+        end = v.end_;
+      }
+    }
+
+    return {fr, start, end,
+            fr.is({dt_bytes}).label("__transitive_hull").expected()};
+  }
+
+  /** fix point for the transitive hull constructor.
+   *
+   * @constructor
+   *
+   * Explicitly defined so we can assert that N > 0 in the other constructor,
+   * and therefore functions like .front() are defined and well-behaved.
+   */
+  static constexpr view hull(const std::array<view, 0> views) {
+    return {"", 0, 0};
   }
 
   // chainable, verbose constructors
@@ -146,8 +185,14 @@ class view {
     return view{*this, start_, p, annotations_};
   }
 
-  constexpr view length(const W &l) const {
+  constexpr view length(const W l) const {
     return view{*this, start_, start_ + (l - 1), annotations_};
+  }
+
+  constexpr view limit(const W l) const {
+    return view{*this, start_,
+                pointer{start_ + (std::min<W>(W(l), W(size())) - W(1))},
+                annotations_};
   }
 
   constexpr view start(void) const {

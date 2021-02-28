@@ -41,13 +41,19 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
   const auto a = view.expected();
 
   if (a.label) {
+    if (*a.label == "__ignore") {
+      // explicitly ignored internal label for weird cases like sprites with
+      // variable field numbers
+      return "";
+    }
+
     os << *a.label << ":\t";
   }
 
   static const std::size_t hexBytesPerLine = 16;
   static const std::size_t hexByteLimit = 120;
 
-  os << "\t; 0x" << std::hex << std::setfill('0') << std::setw(6)
+  os << "\t; $" << std::hex << std::setfill('0') << std::setw(6)
      << view.startPtr().linear() << ": " << std::dec << view.size() << " bytes";
 
   auto it = view.begin();
@@ -62,6 +68,85 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
     } else {
       os << ", $" << std::hex << std::setfill('0') << std::setw(2) << W(val);
     }
+  }
+
+  os << "\n\t; expected";
+
+  if (a.endianness) {
+    switch (*a.endianness) {
+      case gameboy::e_little_endian:
+        os << " LE";
+        break;
+      case gameboy::e_big_endian:
+        os << " BE";
+        break;
+      default:
+        os << " ?E";
+    }
+  } else {
+    os << " ?E";
+  }
+
+  if (a.type) {
+    switch (*a.type) {
+      case gameboy::dt_rom_bank:
+        os << " BANK    ";
+        break;
+      case gameboy::dt_rom_offset:
+        os << " OFFSET  ";
+        break;
+      case gameboy::dt_code:
+        os << " CODE    ";
+        break;
+      case gameboy::dt_byte:
+        os << " BYTE    ";
+        break;
+      case gameboy::dt_bytes:
+        os << " BYTE[]  ";
+        break;
+      case gameboy::dt_word:
+        os << " WORD    ";
+        break;
+      case gameboy::dt_words:
+        os << " WORD[]  ";
+        break;
+      case gameboy::dt_text:
+        os << " TEXT    ";
+        break;
+      default:
+        os << " UNTYPED ";
+    }
+
+    switch (*a.type) {
+      case gameboy::dt_rom_bank:
+      case gameboy::dt_byte:
+      case gameboy::dt_bytes:
+        os << "$" << std::hex << std::setfill('0') << std::setw(2)
+           << W(view.byte());
+        break;
+      case gameboy::dt_rom_offset:
+      case gameboy::dt_word:
+      case gameboy::dt_words:
+        os << "$" << std::hex << std::setfill('0') << std::setw(4)
+           << W(view.word());
+        break;
+      case gameboy::dt_text:
+        os << "\"" << std::string(view) << "\"";
+        break;
+      default:
+        break;
+    }
+
+    switch (*a.type) {
+      case gameboy::dt_bytes:
+      case gameboy::dt_words:
+        os << "\t[...]";
+        break;
+      default:
+        break;
+    }
+
+    os << "\n";
   }
 
   if (hexByteLimit < view.size()) {
@@ -83,7 +168,11 @@ static std::string dump(
     if (!bool(v)) {
       os << " ! ERR view not valid\n";
     } else {
-      os << dump(v) << "\n";
+      std::string d = dump(v);
+
+      if (d != "") {
+        os << d << "\n";
+      }
     }
   }
 
@@ -101,6 +190,7 @@ static std::string dump(const gameboy::rom::header<B, W> header) {
   if (!bool(header)) {
     os << " ! ERR header is not valid\n";
   } else {
+    os << " * FLD set appears valid\n";
     os << dump(header.fields());
   }
 
@@ -151,10 +241,11 @@ static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
   std::ostringstream os{};
 
   os << "SPRITE\n"
-     << " * vwp " << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
+     << " * VWP\n"
+     << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
 
   if (!bool(sprite)) {
-    os << " ! ERR item is not valid\n";
+    os << " ! ERR sprite is not valid\n";
   } else {
     os << std::hex << std::setw(2) << std::setfill('0');
 
@@ -178,6 +269,12 @@ static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
       os << " > PKM [opponent: 0x" << W(sprite.opponent_.byte())
          << ", level: " << W(sprite.level_.byte()) << "]\n";
     }
+
+    os << " * FLD set\n";
+    os << dump(sprite.fields());
+
+    os << " * FLD hull\n";
+    os << dump(gameboy::rom::view<B, W>::hull(sprite.fields()));
   }
 
   return os.str();
