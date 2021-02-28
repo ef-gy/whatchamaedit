@@ -89,7 +89,7 @@ class bgry : public gameboy::rom::image<> {
     return os.str();
   }
 
-  const uint8_t byte(long start) const { return data[start]; }
+  const uint8_t byte(long start) const { return data_[start]; }
 
   const uint16_t word_be(long start) const {
     return uint16_t(byte(start) << 8 | byte(start + 1));
@@ -169,14 +169,14 @@ class bgry : public gameboy::rom::image<> {
     for (const auto &st : starter) {
       if (sps.count(n) == 1) {
         for (const auto i : sps[n]) {
-          data[i] = ids[st];
+          data_[i] = ids[st];
         }
       }
       if (spt.count(n) == 1) {
         for (auto p : spt[n]) {
           for (long pn = 0; pn <= 0x9; p++, pn++) {
             uint16_t r = text::bgry::toROMFormat(st[pn]);
-            data[p] = r;
+            data_[p] = r;
           }
         }
       }
@@ -186,7 +186,7 @@ class bgry : public gameboy::rom::image<> {
     long i = 0x4588;
     for (const auto &st : starter) {
       if (i <= 0x458a) {
-        data[i] = ids[st];
+        data_[i] = ids[st];
         i += 1;
       }
     }
@@ -231,22 +231,22 @@ class bgry : public gameboy::rom::image<> {
     for (long i = 0x4588; i <= 0x4597; i++) {
       switch (n) {
         case 0:
-          data[i] = 0xb1;
+          data_[i] = 0xb1;
           break;
         case 1:
-          data[i] = 0x99;
+          data_[i] = 0x99;
           break;
         case 2:
-          data[i] = 0xb0;
+          data_[i] = 0xb0;
           break;
         default:
-          data[i] = 0x00;
+          data_[i] = 0x00;
           break;
       }
       n++;
     }
 
-    data[0x4399] = 0xb1;
+    data_[0x4399] = 0xb1;
   }
 
   std::string title(void) const { return std::string(header.title); }
@@ -265,8 +265,8 @@ class bgry : public gameboy::rom::image<> {
     static const long high = 0x14e;
     static const long low = 0x14f;
 
-    data[high] = checksum >> 8;
-    data[low] = checksum & 0xff;
+    data_[high] = checksum >> 8;
+    data_[low] = checksum & 0xff;
 
     return this->checksum();
   }

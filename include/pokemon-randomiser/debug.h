@@ -2,6 +2,7 @@
 #define POKEMON_RANDOMISER_DEBUG_H
 
 #include <ef.gy/range.h>
+#include <pokemon-randomiser/header.h>
 #include <pokemon-randomiser/map.h>
 #include <pokemon-randomiser/pointer.h>
 #include <pokemon-randomiser/sprite.h>
@@ -35,15 +36,73 @@ static std::string dump(const gameboy::rom::pointer<B, W, bankSize_> &ptr) {
 }
 
 template <typename B, typename W>
-static std::string dump(const gameboy::rom::view<B, W> &view) {
+static std::string dump(const gameboy::rom::view<B, W> view) {
+  std::ostringstream os{};
+  const auto a = view.expected();
+
+  if (a.label) {
+    os << *a.label << ":\t";
+  }
+
+  static const std::size_t hexBytesPerLine = 16;
+  static const std::size_t hexByteLimit = 120;
+
+  os << "\t; 0x" << std::hex << std::setfill('0') << std::setw(6)
+     << view.startPtr().linear() << ": " << std::dec << view.size() << " bytes";
+
+  auto it = view.begin();
+
+  for (std::size_t c = 0, l = 0; c < hexByteLimit && c < view.size();
+       c++, l = (l < (hexBytesPerLine + 1) ? l + 1 : 0)) {
+    B val = (it == view.end()) ? 0 : *(it++);
+
+    if (l == 0) {
+      os << "\n\tdb\t$" << std::hex << std::setfill('0') << std::setw(2)
+         << W(val);
+    } else {
+      os << ", $" << std::hex << std::setfill('0') << std::setw(2) << W(val);
+    }
+  }
+
+  if (hexByteLimit < view.size()) {
+    os << "\n\t; " << std::dec << (view.size() - hexByteLimit)
+       << " bytes omitted in preview\n";
+  }
+
+  return os.str();
+}
+
+template <typename B, typename W, std::size_t count>
+static std::string dump(
+    const std::array<gameboy::rom::view<B, W>, count> subs) {
   std::ostringstream os{};
 
-  os << std::hex << std::setfill('0') << "[view:"
-     << " window=[" << dump(view.startPtr()) << " - " << dump(view.endPtr())
-     << "]"
-     << " length=[0x" << view.size() << "]"
-     << " cursor=[" << dump(view.curPtr()) << "]"
-     << "]";
+  os << " > VIEWS\n";
+
+  for (const auto v : subs) {
+    if (!bool(v)) {
+      os << " ! ERR view not valid\n";
+    } else {
+      os << dump(v) << "\n";
+    }
+  }
+
+  os << " / VIEWS\n";
+
+  return os.str();
+}
+
+template <typename B, typename W>
+static std::string dump(const gameboy::rom::header<B, W> header) {
+  std::ostringstream os{};
+
+  os << "ROM HEADER\n";
+
+  if (!bool(header)) {
+    os << " ! ERR header is not valid\n";
+  } else {
+    os << dump(header.fields());
+  }
 
   return os.str();
 }

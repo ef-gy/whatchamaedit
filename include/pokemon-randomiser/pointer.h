@@ -21,7 +21,7 @@ class pointer {
    * that manipulat pointers and want to match the style of another for whatever
    * reason there might be.
    */
-  static constexpr pointer asLinear(const pointer &ptr) {
+  static constexpr pointer asLinear(const pointer ptr) {
     return pointer{ptr.linear()};
   }
 
@@ -30,7 +30,7 @@ class pointer {
    * Kind of the same but opposite of asLinear() - does pretty much what you
    * think.
    */
-  static constexpr pointer asBanked(const pointer &ptr) {
+  static constexpr pointer asBanked(const pointer ptr) {
     return pointer{ptr.bank(), ptr.offset()};
   }
 
@@ -40,7 +40,7 @@ class pointer {
    * Useful when you manipulate pointers but want to keep the style they were
    * presented as initially, for style reasons.
    */
-  constexpr pointer asMatched(const pointer &ptr) const {
+  constexpr pointer asMatched(const pointer ptr) const {
     return isLinear() ? asLinear(ptr) : asBanked(ptr);
   }
 
@@ -93,11 +93,11 @@ class pointer {
    */
   static constexpr const B banks(std::size_t s) { return s / bankSize_; }
 
-  constexpr pointer operator+(const ssize_t &d) const {
+  constexpr pointer operator+(const ssize_t d) const {
     return asMatched(pointer{linear() + d});
   }
 
-  constexpr pointer operator-(const ssize_t &d) const {
+  constexpr pointer operator-(const ssize_t d) const {
     return asMatched(pointer{linear() - d});
   }
 
@@ -109,7 +109,7 @@ class pointer {
     return r;
   }
 
-  pointer &operator+=(const ssize_t &d) {
+  pointer &operator+=(const ssize_t d) {
     const pointer lin{linear() + d};
 
     if (isLinear()) {
@@ -123,15 +123,15 @@ class pointer {
     return *this;
   }
 
-  constexpr ssize_t operator-(const pointer &p) const {
+  constexpr ssize_t operator-(const pointer p) const {
     return linear() - p.linear();
   }
 
-  constexpr const bool operator<(const pointer &b) const {
+  constexpr const bool operator<(const pointer b) const {
     return linear() < b.linear();
   }
 
-  constexpr const bool operator<=(const pointer &b) const {
+  constexpr const bool operator<=(const pointer b) const {
     return linear() <= b.linear();
   }
 
@@ -141,7 +141,7 @@ class pointer {
    * individually - but better safe than sorry to be honest. This does actually
    * end up in invalid states in memory corruption cases.
    */
-  constexpr const bool operator==(const pointer &b) const {
+  constexpr const bool operator==(const pointer b) const {
     return linear() == b.linear() && bank() == b.bank() &&
            offset() == b.offset();
   }

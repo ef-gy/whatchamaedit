@@ -3,12 +3,14 @@
 
 #include <pokemon-randomiser/pointer.h>
 
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
 #include <optional>
 #include <set>
+#include <string_view>
 
 namespace gameboy {
 enum type {
@@ -34,14 +36,16 @@ class annotations {
  public:
   using pointer = gameboy::rom::pointer<B, W>;
 
-  annotations(void) {}
-  annotations(const type &a) : type{a} {}
-  annotations(const endianness &a) : endianness{a} {}
+  constexpr annotations(void) {}
+  constexpr annotations(const type a) : type{a} {}
+  constexpr annotations(const endianness a) : endianness{a} {}
+  constexpr annotations(const std::string_view a) : label{a} {}
 
   std::optional<type> type;
   std::optional<endianness> endianness;
+  std::optional<std::string_view> label;
 
-  annotations operator|(const annotations &b) const {
+  constexpr annotations operator|(const annotations b) const {
     annotations a = *this;
 
     if (b.type) {
@@ -50,23 +54,44 @@ class annotations {
     if (b.endianness) {
       a.endianness = b.endianness;
     }
+    if (b.label) {
+      a.label = b.label;
+    }
 
     return a;
   }
 
-  annotations &operator|=(const annotations &b) {
+  constexpr annotations &operator|=(const annotations b) {
     *this = *this | b;
     return *this;
   }
 };
 
 namespace generic {
-
-/* TODO: replace the bytes with a std::string_view, because it shouldn't be
- * mutated, ever, and it'd be cool to be able to constexpr this. Especially the
- * static calculations for the buffer size. */
 template <typename B = int8_t, typename W = int16_t,
-          typename bytes = typename std::vector<B>>
+          typename bytes = typename std::basic_string_view<B>>
+class view;
+
+template <std::size_t count, typename B = uint8_t, typename W = uint16_t>
+class blank {
+ public:
+  using pointer = gameboy::rom::pointer<B, W>;
+  using view = generic::view<B, W>;
+
+  constexpr std::basic_string_view<B> readonly(void) const {
+    return {data_.data(), data_.size()};
+  }
+
+  constexpr const std::size_t size(void) const { return readonly().size(); }
+
+  constexpr operator view(void) const { return view{readonly()}; }
+
+ protected:
+  // static initialisation should make this zero-initialised.
+  static constexpr std::array<B, count> data_{};
+};
+
+template <typename B, typename W, typename bytes>
 class view {
  public:
   using annotations = annotations<B, W>;
@@ -76,25 +101,27 @@ class view {
   using subviews = std::set<view *>;
   using lazies = std::set<lazy *>;
 
-  view(const bytes &data)
+  constexpr view(const bytes data)
       : data_{data},
         start_{0},
         end_{data.size() - 1},
         cur_{0},
         annotations_{} {}
-  view(const bytes &data, const pointer &start)
+
+  constexpr view(const bytes data, const pointer start)
       : data_{data},
         start_{start},
         end_{start.bank(), W(start.bankSize() - 1)},
         cur_{start},
         annotations_{} {}
-  view(const bytes &data, const pointer &start, const pointer &end)
+
+  constexpr view(const bytes data, const pointer start, const pointer end)
       : data_{data}, start_{start}, end_{end}, cur_{start}, annotations_{} {}
 
   // this is the full constructor used by the verbose constructors
-  view(const view *parent, const pointer &start, const pointer &end,
-       const annotations &annotations)
-      : data_{parent->data_},
+  constexpr view(const view parent, const pointer start, const pointer end,
+                 const annotations &annotations)
+      : data_{parent.data_},
         start_{start},
         end_{end},
         cur_{start},
@@ -103,47 +130,48 @@ class view {
   /* "dummy" constructor, for doing things like automatically determining the
    * size of a detailed object description.
    *
-   * Changing values in these views is not advised, but you're already getting a
-   * const reference, so you knew that... :)
+   * Changing values in these views is not advised, but you knew that.
    */
   template <W count = pointer::bankSize()>
-  static view blank(void) {
-    static const bytes block(count, 0);
-
-    return view{block};
+  constexpr static view blank(void) {
+    return view{generic::blank<count, B, W>{}};
   }
 
   // chainable, verbose constructors
-  view from(const pointer &p) const {
-    return view{this, p, end_, annotations_};
+  constexpr view from(const pointer p) const {
+    return view{*this, p, end_, annotations_};
   }
 
-  view to(const pointer &p) const {
-    return view{this, start_, p, annotations_};
+  constexpr view to(const pointer p) const {
+    return view{*this, start_, p, annotations_};
   }
 
-  view length(const W &l) const {
-    return view{this, start_, start_ + (l - 1), annotations_};
+  constexpr view length(const W &l) const {
+    return view{*this, start_, start_ + (l - 1), annotations_};
   }
 
-  view start(void) const { return view{this, start_, end_, annotations_}; }
-
-  view after(const view &v) const {
-    return view{this, v.end_ + 1, end_, annotations_};
+  constexpr view start(void) const {
+    return view{*this, start_, end_, annotations_};
   }
 
-  view before(const view &v) const {
-    return view{this, start_, v.start_ - 1, annotations_};
+  constexpr view after(const view &v) const {
+    return view{*this, v.end_ + 1, end_, annotations_};
   }
 
-  view toBankEnd(void) const {
-    return view{this, start_, pointer{start_.bank(), pointer::bankSize() - 1},
+  constexpr view before(const view &v) const {
+    return view{*this, start_, v.start_ - 1, annotations_};
+  }
+
+  constexpr view toBankEnd(void) const {
+    return view{*this, start_, pointer{start_.bank(), pointer::bankSize() - 1},
                 annotations_};
   }
 
   // data type annotations
-  view expect(const annotations &a) const {
-    return view{this, start_, end_, annotations_ | a};
+  constexpr annotations expected(void) const { return annotations_; }
+
+  constexpr view expect(const annotations a) const {
+    return view{*this, start_, end_, annotations_ | a};
   }
 
   /* set expected data type.
@@ -153,68 +181,74 @@ class view {
    * automatically set the resulting view's new length upon return for specific
    * data types.
    */
-  view is(const annotations &a) const {
+  constexpr view is(const annotations a) const {
     annotations b = annotations_ | a;
 
     if (a.type) {
       switch (*a.type) {
         case dt_rom_bank:
         case dt_byte:
-          return view{this, start_, start_, b};
+          return view{*this, start_, start_, b};
         case dt_rom_offset:
         case dt_word:
-          return view{this, start_, start_ + 1, b};
+          return view{*this, start_, start_ + 1, b};
         default:
           break;
       }
     }
 
-    return view{this, start_, end_, b};
+    return view{*this, start_, end_, b};
   }
 
   // shortcuts
-  view asLittleEndian(void) const { return expect({e_little_endian}); }
+  constexpr view asLittleEndian(void) const {
+    return expect({e_little_endian});
+  }
 
-  view asBigEndian(void) const { return expect({e_big_endian}); }
+  constexpr view asBigEndian(void) const { return expect({e_big_endian}); }
 
-  view asByte(void) const { return is({dt_byte}); }
+  constexpr view asByte(void) const { return is({dt_byte}); }
 
-  view asWord(void) const { return is({dt_word}); }
+  constexpr view asWord(void) const { return is({dt_word}); }
 
-  view asROMBank(void) const { return is({dt_rom_bank}); }
+  constexpr view asROMBank(void) const { return is({dt_rom_bank}); }
 
-  view asROMOffset(void) const { return is({dt_rom_offset}); }
+  constexpr view asROMOffset(void) const { return is({dt_rom_offset}); }
+
+  constexpr view label(const std::string_view l) const { return is({l}); }
 
   // iterator
   class iterator : public std::iterator<std::input_iterator_tag, B> {
    public:
-    explicit iterator(const view &v, const pointer p)
+    constexpr explicit iterator(const view v, const pointer p)
         : view_(v), position_(p) {}
 
-    iterator &operator++(void) {
+    constexpr iterator &operator++(void) {
       position_++;
       return *this;
     }
-    iterator operator++(int) {
+    constexpr iterator operator++(int) {
       auto r = *this;
       ++(*this);
       return r;
     };
-    bool operator==(const iterator &b) {
+    constexpr bool operator==(const iterator b) {
       return view_ == b.view_ && position_ == b.position_;
     }
-    bool operator!=(const iterator &b) { return !(*this == b); }
-    B operator*(void) const { return view_.byte(position_); };
+    constexpr bool operator!=(const iterator b) { return !(*this == b); }
+    constexpr B operator*(void) const { return view_.byte(position_); };
 
    protected:
-    const view &view_;
+    const view view_;
     pointer position_;
   };
 
-  const B operator[](const pointer &ptr) const { return data_[ptr.linear()]; }
+  constexpr const B operator[](const pointer ptr) const {
+    return data_[ptr.linear()];
+  }
 
   // read bytes
-  const B byte(void) const {
+  constexpr const B byte(void) const {
     if (!checkUnitReadable()) {
       /* explicitly check that the current block of data is readable before
        * trying to read anyting - this includes things such as the cursor being
@@ -238,9 +272,9 @@ class view {
     return (*this)[cur_];
   }
 
-  const B byte(const pointer &p) { return (cur_ = p), byte(); }
+  constexpr const B byte(const pointer p) { return (cur_ = p), byte(); }
 
-  const B byte(const pointer &p) const {
+  constexpr const B byte(const pointer p) const {
     /* note: this access function is not as tightly protected as the non-const
      * and the cursor variant - it's expected that accessors of this function
      * will have run a proper check themselves or their accessors would,
@@ -250,19 +284,19 @@ class view {
   }
 
   // read words
-  const W word_be(const pointer &p) const {
+  constexpr const W word_be(const pointer p) const {
     const B b[2]{byte(p), byte(p + 1)};
 
     return W(b[0] << 8 | b[1]);
   }
 
-  const W word_le(const pointer &p) const {
+  constexpr const W word_le(const pointer p) const {
     const B b[2]{byte(p), byte(p + 1)};
 
     return W(b[0] | b[1] << 8);
   }
 
-  const W word(const pointer &p) const {
+  constexpr const W word(const pointer p) const {
     if (annotations_.endianness) {
       switch (*annotations_.endianness) {
         case e_big_endian:
@@ -277,14 +311,14 @@ class view {
     return word_le(p);
   }
 
-  const W word(void) const { return word(cur_); }
+  constexpr const W word(void) const { return word(cur_); }
 
-  const W word(const pointer &p) {
+  constexpr const W word(const pointer p) {
     cur_ = p;
     return word();
   }
 
-  ssize_t size(void) const { return end_ - start_ + 1; }
+  constexpr ssize_t size(void) const { return end_ - start_ + 1; }
 
   operator const std::string(void) const {
     std::string r;
@@ -300,33 +334,35 @@ class view {
     return r;
   }
 
-  operator bytes(void) const { return bytes{begin(), end()}; }
+  constexpr operator bytes(void) const { return bytes{begin(), end()}; }
 
-  bool operator==(const view &b) const {
-    return &data_ == &b.data_ && start_ == b.start_ && end_ == b.end_ &&
-           cur_ == b.cur_;
+  constexpr bool operator==(const view b) const {
+    return data_.data() == b.data_.data() && data_.size() == b.data_.size() &&
+           start_ == b.start_ && end_ == b.end_ && cur_ == b.cur_;
   }
 
-  iterator begin(void) const { return iterator{*this, start_}; };
-  iterator end(void) const { return iterator{*this, end_ + 1}; };
+  constexpr iterator begin(void) const { return iterator{*this, start_}; };
+  constexpr iterator end(void) const { return iterator{*this, end_ + 1}; };
 
-  pointer last(void) const { return end_; }
+  constexpr pointer last(void) const { return end_; }
 
-  operator bool(void) const {
+  constexpr operator bool(void) const {
     return checkRange() && checkUnitReadable() && checkLength() &&
            checkEndianness() && checkValue();
   }
 
-  B banks(void) const { return pointer::banks(data_.size()); }
+  constexpr B banks(void) const { return pointer::banks(data_.size()); }
 
-  bool within(const pointer &s, const pointer &e) const {
+  constexpr bool within(const pointer s, const pointer e) const {
     return start_ <= s && e <= end_;
   }
 
-  bool within(const view &b) const { return within(b.start_, b.end_); }
+  constexpr bool within(const view &b) const {
+    return within(b.start_, b.end_);
+  }
 
   template <typename V>
-  std::vector<V> repeated(const view &cnt) const {
+  std::vector<V> repeated(const view cnt) const {
     std::vector<V> r{};
     pointer st = start_;
 
@@ -360,7 +396,7 @@ class view {
     return l;
   }
 
-  W unit(void) const {
+  constexpr W unit(void) const {
     if (annotations_.type) {
       switch (*annotations_.type) {
         case dt_code:
@@ -384,13 +420,13 @@ class view {
   const pointer curPtr(void) const { return cur_; }
 
  protected:
-  const bytes &data_;
+  const bytes data_;
   const pointer start_;
   const pointer end_;
   pointer cur_;
   annotations annotations_;
 
-  bool checkUnitReadable(void) const {
+  constexpr bool checkUnitReadable(void) const {
     /* check that a full unit of data is currently readable - this requires as
      * many bytes as unit() indicates on top of the cursor, -1 because the end
      * is defined via the high byte of the compound (e.g. base + 1 for a word,
@@ -401,7 +437,7 @@ class view {
            start_ <= cur_ && cur_ <= high && high <= end_;
   }
 
-  bool checkLength(void) const {
+  constexpr bool checkLength(void) const {
     size_t minLength = 0;
     size_t maxLength = size();
 
@@ -434,7 +470,7 @@ class view {
     return minLength <= size() && size() <= maxLength;
   }
 
-  bool checkEndianness(void) const {
+  constexpr bool checkEndianness(void) const {
     if (unit() > 1) {
       /* for any data type with a unit size larger than a byte, e.g. a word or a
        * quad, insist on having the endianness set explicitly.
@@ -456,7 +492,7 @@ class view {
     return true;
   }
 
-  bool check(const pointer &p) const {
+  constexpr bool check(const pointer p) const {
     /* check a pointer for being valid in this view, that is, the pointer is in
      * the range possible for the size of data_. */
     const pointer start{0};
@@ -467,14 +503,14 @@ class view {
     return start <= p && p <= end;
   }
 
-  bool checkRange(void) const {
+  constexpr bool checkRange(void) const {
     /* check that the cursor in this view is valid and in range between the
      * start and end of the window that was set. */
     return start_ <= cur_ && cur_ <= end_ && check(start_) && check(cur_) &&
            check(end_);
   }
 
-  bool checkValue(void) const {
+  constexpr bool checkValue(void) const {
     if (annotations_.type) {
       switch (*annotations_.type) {
         case dt_rom_bank:
@@ -495,7 +531,7 @@ class view {
     return true;
   }
 
-  bool check(const subviews &subs) const {
+  constexpr bool check(const subviews &subs) const {
     bool r = true;
 
     for (const auto &v : subs) {
@@ -509,7 +545,22 @@ class view {
     return r;
   }
 
-  bool check(const lazies &lazs) const {
+  template <std::size_t N>
+  constexpr bool check(const std::array<view, N> subs) const {
+    bool r = true;
+
+    for (const auto v : subs) {
+      r = r && bool(v) && within(v);
+
+      if (!r) {
+        break;
+      }
+    }
+
+    return r;
+  }
+
+  constexpr bool check(const lazies &lazs) const {
     bool r = true;
 
     for (const auto &v : lazs) {
@@ -526,13 +577,19 @@ class view {
 }  // namespace generic
 
 template <typename B = int8_t, typename W = int16_t>
-using view = generic::view<B, W, std::vector<B>>;
+using view = generic::view<B, W, std::basic_string_view<B>>;
 
 namespace container {
 template <typename view, typename thing>
 class array : view {
  public:
   array(view v) : view(v) {}
+};
+
+template <typename view, typename thing>
+class indirect : view {
+ public:
+  indirect(view v) : view(v) {}
 };
 }  // namespace container
 }  // namespace rom

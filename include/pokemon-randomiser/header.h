@@ -4,69 +4,90 @@
 #include <pokemon-randomiser/view.h>
 #include <string.h>
 
+#include <functional>
+#include <numeric>
+
 namespace gameboy {
 namespace rom {
 template <typename B = uint8_t, typename W = uint16_t>
-class header : view<B, W> {
+class header : public view<B, W> {
  public:
   using view = view<B, W>;
   using pointer = typename view::pointer;
-  using subviews = typename view::subviews;
 
  protected:
   static constexpr pointer start{0x0100};
   static constexpr pointer end{0x014f};
 
  public:
-  header(view v)
+  /** @constructor
+   *
+   * @v a view over the whole ROM for which to initialise this ROM header from.
+   *
+   * The given view has to be over the full ROM because this object also
+   * calculates checksums to see if the ROM was read properly and hasn't been
+   * tampered with by tools that don't update checksums. This is slightly
+   * counter-intuitive but this feels like the best place to put the checksum
+   * calculations.
+   *
+   * All other fields are initialised with a view recipe for mapping ROM header
+   * locations to their fields, and can therefore be read directly.
+   */
+  constexpr header(view v)
       : view{v.asLittleEndian()},
-        entry{view::from(start).length(0x0004).expect(dt_code)},
-        logo{view::after(entry).to(0x0133).is(dt_bytes)},
-        title{view::after(logo).to(0x0143).is(dt_text)},
-        manufacturer{view::from(0x013f).to(0x0142).is(dt_text)},
-        gbcolor{view::from(0x0143).asByte()},
-        licensee{view::after(title).is(dt_text).length(0x0002)},
-        supergb{view::after(licensee).asByte()},
-        cartridge{view::after(supergb).asByte()},
-        rom{view::after(cartridge).asByte()},
-        ram{view::after(rom).asByte()},
-        region{view::after(ram).asByte()},
-        oldLicensee{view::after(region).asByte()},
-        version{view::after(oldLicensee).asByte()},
-        headerChecksum_{view::after(version).asByte()},
-        globalChecksum_{view::after(headerChecksum_).asWord().asBigEndian()} {}
+        entry{view::from(start).length(0x0004).expect(dt_code).label(
+            "__gb_entry_point")},
+        logo{view::after(entry).to(0x0133).is(dt_bytes).label(
+            "__gb_nintendo_logo")},
+        title{view::after(logo).to(0x0143).is(dt_text).label(
+            "__gb_cartridge_title")},
+        manufacturer{view::from(0x013f).to(0x0142).is(dt_text).label(
+            "__gb_manufacturer_code")},
+        gbcolor{view::from(0x0143).asByte().label("__gb_color_flags")},
+        licensee{view::after(title).is(dt_text).length(0x0002).label(
+            "__gb_licensee_code")},
+        supergb{view::after(licensee).asByte().label("__gb_super_flags")},
+        cartridge{view::after(supergb).asByte().label("__gb_cartridge_flags")},
+        rom{view::after(cartridge).asByte().label("__gb_rom_size_flags")},
+        ram{view::after(rom).asByte().label("__gb_ram_size_flags")},
+        region{view::after(ram).asByte().label("__gb_region_code")},
+        oldLicensee{
+            view::after(region).asByte().label("__gb_old_licensee_code")},
+        version{
+            view::after(oldLicensee).asByte().label("__gb_cartridge_version")},
+        headerChecksum_{
+            view::after(version).asByte().label("__gb_header_chksum")},
+        globalChecksum_{view::after(headerChecksum_)
+                            .asWord()
+                            .asBigEndian()
+                            .label("__gb_global_chksum")} {}
 
-  B checksumH(bool calculate) const {
+  constexpr B checksumH(bool calculate) const {
     if (calculate) {
-      W c = 0;
-
-      for (const auto b : view::after(logo).before(headerChecksum_)) {
-        c = c - b - 1;
-      }
-
-      return B(c);
+      // the checksum is a check-difference, with an extra -1 per item, thus the
+      // custom lambda to calculate it.
+      return std::accumulate(headerChecksumRange().begin(),
+                             headerChecksumRange().end(), W(0),
+                             [](const W a, const W b) { return a - b - 1; });
     }
 
     return headerChecksum_.byte();
   }
 
-  W checksumR(bool calculate) const {
+  constexpr W checksumR(bool calculate) const {
     if (calculate) {
-      W chk = globalChecksum_.word();
-      W c = 0;
-
-      // remove current checksum bytes before a full sum
-      c -= chk >> 8;
-      c -= chk & 0xff;
-
-      for (const auto b : view(*this)) {
-        c += b;
-      }
-
-      return c;
+      // the checksum is a literal sum, except we need to skip the recorded
+      // checksum, so we divide it up into two ranges and accumulate with the
+      // standard library.
+      return std::accumulate(globalChecksumHeaderRange().begin(),
+                             globalChecksumHeaderRange().end(), W(0)) +
+             std::accumulate(globalChecksumDataRange().begin(),
+                             globalChecksumDataRange().end(), W(0));
     }
 
+    // read current ROM checksum from header
     return globalChecksum_.word();
+    ;
   }
 
   view entry;
@@ -83,33 +104,43 @@ class header : view<B, W> {
   view oldLicensee;
   view version;
 
-  operator bool(void) const {
-    return view(*this) && view::check(subviews_()) &&
+  constexpr operator bool(void) const {
+    return view(*this) && view::check(fields()) &&
            checksumH(true) == checksumH(false) &&
            checksumR(true) == checksumR(false);
+  }
+
+  constexpr std::array<view, 14> fields(void) const {
+    return {entry,
+            logo,
+            title,
+            manufacturer,
+            gbcolor,
+            licensee,
+            supergb,
+            cartridge,
+            rom,
+            ram,
+            oldLicensee,
+            version,
+            headerChecksum_,
+            globalChecksum_};
   }
 
  protected:
   view headerChecksum_;
   view globalChecksum_;
 
-  subviews subviews_(void) const {
-    auto s = const_cast<header*>(this);
-    return subviews{&s->entry,
-                    &s->logo,
-                    &s->title,
-                    &s->manufacturer,
-                    &s->gbcolor,
-                    &s->licensee,
-                    &s->supergb,
-                    &s->cartridge,
-                    &s->rom,
-                    &s->ram,
-                    &s->region,
-                    &s->oldLicensee,
-                    &s->version,
-                    &s->headerChecksum_,
-                    &s->globalChecksum_};
+  constexpr view headerChecksumRange(void) const {
+    return view::after(logo).before(headerChecksum_);
+  }
+
+  constexpr view globalChecksumHeaderRange(void) const {
+    return view::start().before(globalChecksum_);
+  }
+
+  constexpr view globalChecksumDataRange(void) const {
+    return view::after(globalChecksum_);
   }
 };
 }  // namespace rom
