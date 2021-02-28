@@ -40,6 +40,8 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
   std::ostringstream os{};
   const auto a = view.expected();
 
+  std::string prefix{""};
+
   if (a.label) {
     if (*a.label == "__ignore") {
       // explicitly ignored internal label for weird cases like sprites with
@@ -47,7 +49,18 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
       return "";
     }
 
-    os << *a.label << ":\t";
+    if (*a.label == "__transitive_hull") {
+      prefix = "; ";
+    }
+
+    os << prefix << *a.label;
+
+    if (!((*a.label).rfind("__", 0) == 0)) {
+      os << "_" << std::hex << std::setfill('0') << std::setw(6)
+         << view.startPtr().linear() << "_" << std::dec << view.size();
+    }
+
+    os << ":\t";
   }
 
   static const std::size_t hexBytesPerLine = 16;
@@ -63,14 +76,15 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
     B val = (it == view.end()) ? 0 : *(it++);
 
     if (l == 0) {
-      os << "\n\tdb\t$" << std::hex << std::setfill('0') << std::setw(2)
+      os << "\n"
+         << prefix << "\tdb\t$" << std::hex << std::setfill('0') << std::setw(2)
          << W(val);
     } else {
       os << ", $" << std::hex << std::setfill('0') << std::setw(2) << W(val);
     }
   }
 
-  os << "\n\t; expected";
+  os << "\n" << prefix << "\t; type metadata";
 
   if (a.endianness) {
     switch (*a.endianness) {
@@ -122,13 +136,13 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
       case gameboy::dt_byte:
       case gameboy::dt_bytes:
         os << "$" << std::hex << std::setfill('0') << std::setw(2)
-           << W(view.byte());
+           << W(view.byte()) << " (" << std::dec << W(view.byte()) << ")";
         break;
       case gameboy::dt_rom_offset:
       case gameboy::dt_word:
       case gameboy::dt_words:
         os << "$" << std::hex << std::setfill('0') << std::setw(4)
-           << W(view.word());
+           << W(view.word()) << " (" << std::dec << W(view.word()) << ")";
         break;
       case gameboy::dt_text:
         os << "\"" << std::string(view) << "\"";
@@ -158,13 +172,25 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
 }
 
 template <typename B, typename W, std::size_t count>
-static std::string dump(
-    const std::array<gameboy::rom::view<B, W>, count> subs) {
+static std::string dump(const std::array<gameboy::rom::view<B, W>, count> views,
+                        std::string_view section = "UNNAMED") {
   std::ostringstream os{};
 
-  os << " > VIEWS\n";
+  auto hull{gameboy::rom::view<B, W>::hull(views)};
 
-  for (const auto v : subs) {
+  os << "SECTION \"" << section << " 0x" << std::hex << hull.startPtr().linear()
+     << "\", ";
+  if (hull.startPtr().bank() == 0) {
+    os << "ROM0[$" << std::hex << hull.startPtr().offset() << "]";
+  } else {
+    os << "ROMX[$" << std::hex << hull.startPtr().offset() << "], BANK["
+       << W(hull.startPtr().bank()) << "]";
+  }
+  os << "\n";
+
+  os << "\n" << dump(hull) << "\n";
+
+  for (const auto v : views) {
     if (!bool(v)) {
       os << " ! ERR view not valid\n";
     } else {
@@ -176,8 +202,6 @@ static std::string dump(
     }
   }
 
-  os << " / VIEWS\n";
-
   return os.str();
 }
 
@@ -185,13 +209,10 @@ template <typename B, typename W>
 static std::string dump(const gameboy::rom::header<B, W> header) {
   std::ostringstream os{};
 
-  os << "ROM HEADER\n";
-
   if (!bool(header)) {
     os << " ! ERR header is not valid\n";
   } else {
-    os << " * FLD set appears valid\n";
-    os << dump(header.fields());
+    os << dump(header.fields(), "GameBoy ROM Header");
   }
 
   return os.str();
@@ -241,7 +262,7 @@ static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
   std::ostringstream os{};
 
   os << "SPRITE\n"
-     << " * VWP\n"
+     << " * VMP\n"
      << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
 
   if (!bool(sprite)) {
@@ -270,11 +291,9 @@ static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
          << ", level: " << W(sprite.level_.byte()) << "]\n";
     }
 
-    os << " * FLD set\n";
     os << dump(sprite.fields());
-
-    os << " * FLD hull\n";
-    os << dump(gameboy::rom::view<B, W>::hull(sprite.fields()));
+    os << dump(gameboy::rom::view<B, W>::hull(sprite.fields())
+                   .label("sprite_transitive_hull"));
   }
 
   return os.str();
@@ -285,7 +304,7 @@ static std::string dump(const pokemon::object::bgry<B, W> &object) {
   std::ostringstream os{};
 
   os << "OBJECT MAP\n"
-     << " * vwp " << dump(gameboy::rom::view<B, W>(object)) << "\n";
+     << " * VMP " << dump(gameboy::rom::view<B, W>(object)) << "\n";
   if (!object) {
     if (!gameboy::rom::view<B, W>(object)) {
       os << " ! ERR invalid view\n";
@@ -297,6 +316,11 @@ static std::string dump(const pokemon::object::bgry<B, W> &object) {
     os << " - sgn#" << std::dec << object.signc() << "\n";
     os << " - spr#" << std::dec << object.spritec() << "/"
        << object.sprites.size() << "\n";
+
+    os << dump(object.fields());
+    os << dump(gameboy::rom::view<B, W>::hull(object.fields())
+                   .label("object_transitive_hull"));
+
     for (const auto &s : object.sprites) {
       if (s) {
         os << debug::dump(s);
