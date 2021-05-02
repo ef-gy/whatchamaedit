@@ -78,7 +78,7 @@ class bgry : public gameboy::rom::image<> {
 
       if (pokemon::text::bgry::english.count(v) == 1) {
         os << " " << std::setw(4) << std::setfill('.')
-           << pokemon::text::bgry::english[v];
+           << pokemon::text::bgry::english.at(v);
       } else {
         os << " ....";
       }

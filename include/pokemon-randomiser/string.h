@@ -29,7 +29,7 @@ class string : gameboy::rom::view<B, W> {
         break;
       }
 
-      const std::string v = pokemon::text::bgry::english[b];
+      const std::string_view v = pokemon::text::bgry::english.at(b);
 
       if (v.empty()) {
         break;

@@ -7,7 +7,7 @@
 
 namespace pokemon {
 namespace text {
-using charmap = std::map<uint8_t, std::string>;
+using charmap = const std::map<uint8_t, const std::string_view>;
 
 namespace bgry {
 
