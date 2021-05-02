@@ -1,8 +1,8 @@
-#if !defined(POKEMON_RANDOMISER_STRING_H)
-#define POKEMON_RANDOMISER_STRING_H
+#if !defined(WHATCHAMAEDIT_STRING_H)
+#define WHATCHAMAEDIT_STRING_H
 
-#include <pokemon-randomiser/character-map.h>
-#include <pokemon-randomiser/view.h>
+#include <whatchamaedit/character-map.h>
+#include <whatchamaedit/view.h>
 
 #include <set>
 #include <string>
@@ -21,15 +21,15 @@ class string : gameboy::rom::view<B, W> {
     std::string rv{};
 
     for (const auto b : *this) {
-      if (b == pokemon::text::bgry::end) {
+      if (b == text::pokemon::bgry::end) {
         break;
       }
 
-      if (pokemon::text::bgry::english.count(b) == 0) {
+      if (text::pokemon::bgry::english.count(b) == 0) {
         break;
       }
 
-      const std::string_view v = pokemon::text::bgry::english.at(b);
+      const std::string_view v = text::pokemon::bgry::english.at(b);
 
       if (v.empty()) {
         break;
@@ -48,8 +48,8 @@ class string : gameboy::rom::view<B, W> {
     std::size_t length = 0, text = 0;
 
     for (const auto b : *this) {
-      if (b == 0 || pokemon::text::bgry::english.count(b) == 0 ||
-          b == pokemon::text::bgry::end) {
+      if (b == 0 || text::pokemon::bgry::english.count(b) == 0 ||
+          b == text::pokemon::bgry::end) {
         if (text > 4 && text * 12 / 11 < length) {
           rv.insert(start);
         }
@@ -58,7 +58,7 @@ class string : gameboy::rom::view<B, W> {
         text = 0;
       } else {
         length++;
-        if (pokemon::text::bgry::isText(b)) {
+        if (text::pokemon::bgry::isText(b)) {
           text++;
         }
       }

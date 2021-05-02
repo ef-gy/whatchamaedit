@@ -4,15 +4,13 @@
  * documentation that didn't seem to fit in anywhere else.
  */
 
-#if !defined(POKEMON_RANDOMISER_VERSION_H)
-#define POKEMON_RANDOMISER_VERSION_H
+#if !defined(WHATCHAMAEDIT_VERSION_H)
+#define WHATCHAMAEDIT_VERSION_H
 
-namespace pokemon {
-namespace randomiser {
+namespace whatchamaedit {
 /* Library version
  */
 static const unsigned int version = 1;
-}  // namespace randomiser
-}  // namespace pokemon
+}  // namespace whatchamaedit
 
 #endif

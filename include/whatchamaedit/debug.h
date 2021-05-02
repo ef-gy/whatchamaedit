@@ -1,12 +1,10 @@
-#if !defined(POKEMON_RANDOMISER_DEBUG_H)
-#define POKEMON_RANDOMISER_DEBUG_H
+#if !defined(WHATCHAMAEDIT_DEBUG_H)
+#define WHATCHAMAEDIT_DEBUG_H
 
 #include <ef.gy/range.h>
-#include <pokemon-randomiser/header.h>
-#include <pokemon-randomiser/map.h>
-#include <pokemon-randomiser/pointer.h>
-#include <pokemon-randomiser/sprite.h>
-#include <pokemon-randomiser/view.h>
+#include <whatchamaedit/header.h>
+#include <whatchamaedit/pointer.h>
+#include <whatchamaedit/view.h>
 
 #include <iomanip>
 #include <sstream>
@@ -258,128 +256,6 @@ static std::string dump(const gameboy::rom::view<B, W> &view,
     }
     if (!view.within(*v)) {
       os << " ! ERR view is not contained within given parent\n";
-    }
-  }
-
-  return os.str();
-}
-
-template <typename B, typename W>
-static std::string dump(const pokemon::sprite::bgry<B, W> &sprite) {
-  std::ostringstream os{};
-
-  os << dump(gameboy::rom::view<B, W>(sprite)) << "\n";
-
-  if (!bool(sprite)) {
-    os << " ! ERR sprite is not valid\n";
-  } else {
-    os << std::hex << std::setw(2) << std::setfill('0');
-
-    std::string_view section = "SPRITE";
-
-    if (sprite.isNPC()) {
-      section = "NPC SPRITE";
-    }
-    if (sprite.isItem()) {
-      section = "ITEM SPRITE";
-    }
-    if (sprite.isTrainer()) {
-      section = "TRAINER SPRITE";
-    }
-    if (sprite.isPokemon()) {
-      section = "POKEMON SPRITE";
-    }
-
-    os << dump(sprite.fields(), section);
-  }
-
-  return os.str();
-}
-
-template <typename B, typename W>
-static std::string dump(const pokemon::object::bgry<B, W> &object) {
-  std::ostringstream os{};
-
-  os << "OBJECT MAP\n" << dump(gameboy::rom::view<B, W>(object)) << "\n";
-  if (!object) {
-    if (!gameboy::rom::view<B, W>(object)) {
-      os << " ! ERR invalid view\n";
-    } else {
-      os << " ! ERR invalid sub view for object map\n";
-    }
-  } else {
-    os << " - wrp#" << std::dec << object.warpc() << "\n";
-    os << " - sgn#" << std::dec << object.signc() << "\n";
-    os << " - spr#" << std::dec << object.spritec() << "/"
-       << object.sprites.size() << "\n";
-
-    os << dump(object.fields(), "OBJECT MAP");
-
-    for (const auto &s : object.sprites) {
-      if (s) {
-        os << debug::dump(s);
-      }
-    }
-  }
-
-  return os.str();
-}
-
-template <typename B, typename W>
-static std::string dump(const pokemon::map::bgry<B, W> &map) {
-  using view = gameboy::rom::view<B, W>;
-  using tileset = pokemon::tileset::bgry<B, W>;
-
-  std::ostringstream os{};
-
-  os << "MAP\n"
-     << " * idn " << std::dec << W(map.id) << "\n"
-     << " * vwp " << dump(view(map)) << "\n";
-
-  if (!map) {
-    os << " ! ERR invalid map data\n";
-    if (!view(map)) {
-      os << " ! ERR invalid view\n";
-    }
-    if (!tileset(map)) {
-      os << " ! ERR invalid tile set\n";
-    }
-  } else {
-    os << " * CUR " << dump(map.start) << "\n";
-
-    os << " - dim {W,H}@T: {" << W(map.width()) << "," << W(map.height())
-       << "}@" << map.size() << "\n";
-
-    os << " - cnc" << (map.haveNorth() ? " [NORTH]" : " [-----]")
-       << (map.haveSouth() ? " [SOUTH]" : " [-----]")
-       << (map.haveWest() ? " [WEST.]" : " [-----]")
-       << (map.haveEast() ? " [EAST.]" : " [-----]") << "\n";
-
-    for (const auto l : efgy::range<B>(0, map.height(), false)) {
-      os << (l == 0 ? " > BLK" : "   xxx");
-
-      for (const auto c : efgy::range<B>(0, map.width(), false)) {
-        const auto block = map.block(l, c);
-
-        if (block) {
-          os << " " << std::hex << std::setw(2) << std::setfill('0')
-             << W(*block);
-        } else {
-          os << " ??";
-        }
-      }
-
-      os << "\n";
-    }
-
-    if (map.text) {
-      os << " - txt " << debug::dump(map.text) << "\n";
-    }
-
-    auto obj = map.objects();
-
-    if (obj) {
-      os << dump(obj);
     }
   }
 

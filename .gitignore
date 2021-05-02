@@ -1,0 +1,8 @@
+# ROMs being worked on
+*.gb
+
+# build cruft
+dependencies.mk
+
+# targets
+info

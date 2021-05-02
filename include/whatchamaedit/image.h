@@ -1,7 +1,7 @@
-#if !defined(POKEMON_RANDOMISER_IMAGE_H)
-#define POKEMON_RANDOMISER_IMAGE_H
+#if !defined(WHATCHAMAEDIT_IMAGE_H)
+#define WHATCHAMAEDIT_IMAGE_H
 
-#include <pokemon-randomiser/view.h>
+#include <whatchamaedit/view.h>
 
 namespace gameboy {
 namespace rom {

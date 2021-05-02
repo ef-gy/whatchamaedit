@@ -1,8 +1,8 @@
-#if !defined(POKEMON_RANDOMISER_HEADER_H)
-#define POKEMON_RANDOMISER_HEADER_H
+#if !defined(WHATCHAMAEDIT_HEADER_H)
+#define WHATCHAMAEDIT_HEADER_H
 
-#include <pokemon-randomiser/view.h>
 #include <string.h>
+#include <whatchamaedit/view.h>
 
 #include <functional>
 #include <numeric>

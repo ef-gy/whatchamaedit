@@ -1,14 +1,14 @@
-#if !defined(POKEMON_RANDOMISER_CHARACTER_MAP_H)
-#define POKEMON_RANDOMISER_CHARACTER_MAP_H
+#if !defined(WHATCHAMAEDIT_CHARACTER_MAP_H)
+#define WHATCHAMAEDIT_CHARACTER_MAP_H
 
 #include <algorithm>
 #include <map>
 #include <string>
 
-namespace pokemon {
 namespace text {
 using charmap = const std::map<uint8_t, const std::string_view>;
 
+namespace pokemon {
 namespace bgry {
 
 /* The BGRY section used Bulbapedia extensively for character translations.
@@ -187,7 +187,7 @@ static uint8_t toROMFormat(std::string &s) {
   std::set<uint8_t> ids;
   std::size_t longest = 1;
 
-  for (const auto &p : pokemon::text::bgry::english) {
+  for (const auto &p : text::pokemon::bgry::english) {
     if (p.second.size() >= longest) {
       if (s.rfind(p.second) == 0) {
         if (p.second.size() > longest) {
@@ -211,7 +211,7 @@ static uint8_t toROMFormat(char c) {
   // TODO: this function needs to be modified so that the reverse of this is
   // always the same as the source text - or at the very least the shortest
   // subset, if it starts with P. :)
-  for (const auto &p : pokemon::text::bgry::english) {
+  for (const auto &p : text::pokemon::bgry::english) {
     if (p.second.size() > 0) {
       if (c == p.second[0]) {
         return p.first;
@@ -223,7 +223,7 @@ static uint8_t toROMFormat(char c) {
 }
 
 }  // namespace bgry
-}  // namespace text
 }  // namespace pokemon
+}  // namespace text
 
 #endif

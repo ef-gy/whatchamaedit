@@ -1,5 +1,5 @@
-#if !defined(POKEMON_RANDOMISER_POINTER_H)
-#define POKEMON_RANDOMISER_POINTER_H
+#if !defined(WHATCHAMAEDIT_POINTER_H)
+#define WHATCHAMAEDIT_POINTER_H
 
 #include <vector>
 

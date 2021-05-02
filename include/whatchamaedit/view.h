@@ -1,7 +1,7 @@
-#if !defined(POKEMON_RANDOMISER_VIEW_H)
-#define POKEMON_RANDOMISER_VIEW_H
+#if !defined(WHATCHAMAEDIT_VIEW_H)
+#define WHATCHAMAEDIT_VIEW_H
 
-#include <pokemon-randomiser/pointer.h>
+#include <whatchamaedit/pointer.h>
 
 #include <array>
 #include <fstream>
