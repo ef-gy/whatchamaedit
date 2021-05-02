@@ -157,7 +157,7 @@ class bgry : public gameboy::rom::image<> {
     return rv;
   }
 
-  bool setStarterPokemon(const std::set<std::string> &starter) {
+  bool setStarterPokemon(const std::vector<std::string> &starter) {
     bool ok = true;
 
     auto ids = getAllPokemonIds();

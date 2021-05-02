@@ -88,6 +88,12 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
     }
   }
 
+  if (hexByteLimit < view.size()) {
+    os << "\n"
+       << prefix << "\t; " << std::dec << (view.size() - hexByteLimit)
+       << " bytes omitted in preview";
+  }
+
   os << "\n" << prefix << "\t; type metadata";
 
   if (a.endianness) {
@@ -165,11 +171,6 @@ static std::string dump(const gameboy::rom::view<B, W> view) {
     }
 
     os << "\n";
-  }
-
-  if (hexByteLimit < view.size()) {
-    os << "\n\t; " << std::dec << (view.size() - hexByteLimit)
-       << " bytes omitted in preview\n";
   }
 
   return os.str();
